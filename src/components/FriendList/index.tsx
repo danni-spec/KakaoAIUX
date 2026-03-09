@@ -42,18 +42,36 @@ function SquircleClipDef() {
   );
 }
 
-/** 원 제스처 감지: 포인트들의 중심 기준 각도 범위가 300° 이상이면 원으로 판정 */
-function detectCircle(points: { x: number; y: number }[]): boolean {
-  if (points.length < 20) return false;
+/**
+ * 원 제스처 상태 — ref로 관리하여 리렌더 없이 추적
+ * - "idle": 터치 대기
+ * - "pending": 터치 시작 후 방향 판별 대기 (스크롤 vs 원)
+ * - "gesture": 원 그리기 진행 중 (스크롤 차단)
+ * - "scroll": 수직 스크롤로 판정 (제스처 포기, 브라우저 스크롤 허용)
+ */
+type GesturePhase = "idle" | "pending" | "gesture" | "scroll";
+
+const CIRCLE_ANGLE_THRESHOLD = 252; // 원의 70% = 252°
+const DIRECTION_DECIDE_DISTANCE = 12; // px: 이 거리 이상 이동 시 방향 판별
+const VERTICAL_RATIO = 2.0; // dy/dx 비율이 이 이상이면 수직 스크롤로 판정
+const MIN_POINTS_FOR_ANGLE = 8; // 누적 각도 계산 최소 포인트 수
+
+/** 누적 각도 계산: 연속 포인트 간 중심 기준 각도 변화의 절대합 */
+function calcCumulativeAngle(points: { x: number; y: number }[]): number {
+  if (points.length < MIN_POINTS_FOR_ANGLE) return 0;
   const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
   const cy = points.reduce((s, p) => s + p.y, 0) / points.length;
-  const angles = points.map((p) => Math.atan2(p.y - cy, p.x - cx));
-  // 12등분 버킷에 포인트가 분포되었는지 확인
-  const buckets = new Set<number>();
-  for (const a of angles) {
-    buckets.add(Math.floor(((a + Math.PI) / (2 * Math.PI)) * 12) % 12);
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a1 = Math.atan2(points[i - 1].y - cy, points[i - 1].x - cx);
+    const a2 = Math.atan2(points[i].y - cy, points[i].x - cx);
+    let delta = a2 - a1;
+    // -π ~ π 범위로 정규화
+    if (delta > Math.PI) delta -= 2 * Math.PI;
+    if (delta < -Math.PI) delta += 2 * Math.PI;
+    total += delta;
   }
-  return buckets.size >= 10;
+  return Math.abs(total) * (180 / Math.PI); // 도 단위
 }
 
 export function FriendList() {
@@ -91,35 +109,68 @@ export function FriendList() {
     flushSync(() => setAiPopupOpen(true));
   }, []);
 
-  // ── 원 제스처: passive 리스너로 스크롤 성능 보존 ──
+  // ── 원 제스처: 방향 판별 후 선택적 preventDefault ──
   const mainRef = useRef<HTMLElement>(null);
+  const gesturePhaseRef = useRef<GesturePhase>("idle");
+  const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   useEffect(() => {
     const el = mainRef.current;
     if (!el) return;
 
     const onTouchStart = (e: TouchEvent) => {
-      circlePointsRef.current = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }];
+      const { clientX: x, clientY: y } = e.touches[0];
+      circlePointsRef.current = [{ x, y }];
       circleFiredRef.current = false;
+      startPosRef.current = { x, y };
+      gesturePhaseRef.current = "pending";
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (circleFiredRef.current) return;
-      circlePointsRef.current.push({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-      if (detectCircle(circlePointsRef.current)) {
+      const phase = gesturePhaseRef.current;
+      if (phase === "idle" || phase === "scroll" || circleFiredRef.current) return;
+
+      const { clientX: x, clientY: y } = e.touches[0];
+      circlePointsRef.current.push({ x, y });
+
+      // pending 단계: 일정 거리 이동 후 방향 판별
+      if (phase === "pending") {
+        const dx = Math.abs(x - startPosRef.current.x);
+        const dy = Math.abs(y - startPosRef.current.y);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist >= DIRECTION_DECIDE_DISTANCE) {
+          if (dx > 0 && dy / dx >= VERTICAL_RATIO) {
+            // 수직 이동 → 스크롤로 판정, 제스처 포기
+            gesturePhaseRef.current = "scroll";
+            circlePointsRef.current = [];
+            return;
+          }
+          // 비수직 → 원 제스처 진행
+          gesturePhaseRef.current = "gesture";
+        }
+        return; // 아직 판별 안 됨 → 스크롤도 제스처도 아님
+      }
+
+      // gesture 단계: 스크롤 차단 + 누적 각도 체크
+      e.preventDefault();
+      const angle = calcCumulativeAngle(circlePointsRef.current);
+      if (angle >= CIRCLE_ANGLE_THRESHOLD) {
         circleFiredRef.current = true;
         circlePointsRef.current = [];
+        gesturePhaseRef.current = "idle";
         openAIPopup();
       }
     };
 
     const onTouchEnd = () => {
       circlePointsRef.current = [];
+      gesturePhaseRef.current = "idle";
     };
 
-    // passive: true → 브라우저 네이티브 스크롤 최적화 유지
+    // passive: false → gesture 단계에서 preventDefault 가능
+    // pending/scroll 단계에서는 preventDefault를 호출하지 않으므로 스크롤 정상 동작
     el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: true });
 
     return () => {
@@ -142,7 +193,7 @@ export function FriendList() {
       if (!mouseDownRef.current || circleFiredRef.current) return;
       e.preventDefault();
       circlePointsRef.current.push({ x: e.clientX, y: e.clientY });
-      if (detectCircle(circlePointsRef.current)) {
+      if (calcCumulativeAngle(circlePointsRef.current) >= CIRCLE_ANGLE_THRESHOLD) {
         circleFiredRef.current = true;
         circlePointsRef.current = [];
         mouseDownRef.current = false;
