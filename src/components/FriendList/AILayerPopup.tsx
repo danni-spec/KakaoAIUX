@@ -906,22 +906,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <>
       {/* ── AI 레이어 카드 (bottom 고정, 위로 확장) ── */}
       <div
-        className="absolute left-4 right-4 transition-all duration-500 flex flex-col justify-end"
+        className="absolute left-4 right-4 flex flex-col justify-end"
         style={{
-          top: (navActive || navArrived) ? 100 : undefined,
-          bottom: isOpen ? 60 : -300,
-          maxHeight: choonsikFullscreen ? "calc(100% - 120px)" : undefined,
+          top: (navActive || navArrived) ? 100 : choonsikFullscreen ? 54 : "auto",
+          bottom: isOpen ? 16 : -300,
           opacity: isOpen && !minimized ? 1 : 0,
           transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
           pointerEvents: minimized ? "none" : "auto",
-          transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+          transition: "top 0.6s cubic-bezier(0.32, 0.72, 0, 1), bottom 0.6s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease, transform 0.5s cubic-bezier(0.32, 0.72, 0, 1)",
         }}
       >
-        <div className={`relative ${navActive || navArrived ? "h-full" : ""}`}>
+        <div className="relative" style={{ height: (navActive || navArrived || choonsikFullscreen) ? "100%" : "auto", transition: "height 0.6s cubic-bezier(0.32, 0.72, 0, 1)" }}>
           {/* ── 외곽 글로우: 블러된 회전 그라디언트 ── */}
           <div
             className="absolute inset-[-8px] rounded-[32px] overflow-hidden -z-10 pointer-events-none animate-glow-breathe"
+            style={{}}
           >
             <div
               className="absolute inset-[-100%] animate-gradient-spin"
@@ -934,8 +934,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
           {/* ── 카드 본체 ── */}
           <div
-            className={`relative rounded-[30px] overflow-hidden transition-[background-color,box-shadow] duration-500 backdrop-blur-[4px] ${navActive || navArrived ? "h-full" : ""}`}
-            style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)" }}
+            className="relative rounded-[30px] overflow-hidden backdrop-blur-[4px] flex flex-col"
+            style={{ height: (navActive || navArrived || choonsikFullscreen) ? "100%" : "auto", backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)", transition: "height 0.6s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.5s ease, box-shadow 0.5s ease" }}
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
@@ -1532,28 +1532,25 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               {/* ── 춘식이 사원증 카드 (입력창 위, 아래에서 위로 확장) ── */}
               {choonsikCardView && (
                 <div
-                  className="flex items-center justify-center w-full overflow-hidden transition-all duration-500"
+                  className="flex-1 flex items-center justify-center w-full overflow-hidden min-h-0"
                   style={{
-                    maxHeight: choonsikFullscreen ? 500 : 0,
                     opacity: choonsikFullscreen ? 1 : 0,
-                    paddingTop: choonsikFullscreen ? 16 : 0,
-                    paddingBottom: choonsikFullscreen ? 8 : 0,
-                    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                    transform: choonsikFullscreen ? "translateY(0) scale(1)" : "translateY(60px) scale(0.88)",
+                    transition: "opacity 0.8s cubic-bezier(0.32, 0.72, 0, 1), transform 0.8s cubic-bezier(0.32, 0.72, 0, 1)",
+                    padding: "12px 0",
                   }}
                 >
                   <img
                     src="/card-choonsik.png"
                     alt="춘식이"
-                    className="transition-all duration-500"
                     style={{
-                      width: 260,
-                      aspectRatio: "0.63 / 1",
+                      width: 220,
+                      height: 304,
                       objectFit: "cover",
                       borderRadius: 16,
                       border: "none",
                       outline: "none",
                       boxShadow: "none",
-                      transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
                     }}
                   />
                 </div>
@@ -1575,6 +1572,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   }}
                   onClick={() => {
                     if (!textSending && !sendStatus) {
+                      if (choonsikCardView) {
+                        setChoonsikFullscreen(false);
+                        setTimeout(() => setChoonsikCardView(false), 600);
+                      }
                       setTextMode(true);
                       inputRef.current?.focus({ preventScroll: true });
                     }
