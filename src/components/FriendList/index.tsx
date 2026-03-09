@@ -128,30 +128,36 @@ export function FriendList() {
 
     const onTouchMove = (e: TouchEvent) => {
       const phase = gesturePhaseRef.current;
-      if (phase === "idle" || phase === "scroll" || circleFiredRef.current) return;
+      if (phase === "idle" || circleFiredRef.current) return;
+
+      // scroll 판정 이후 → 브라우저 기본 스크롤 허용
+      if (phase === "scroll") return;
 
       const { clientX: x, clientY: y } = e.touches[0];
       circlePointsRef.current.push({ x, y });
 
-      // pending 단계: 일정 거리 이동 후 방향 판별
+      // pending 단계: 방향 판별 전까지 스크롤 차단
       if (phase === "pending") {
+        e.preventDefault();
         const dx = Math.abs(x - startPosRef.current.x);
         const dy = Math.abs(y - startPosRef.current.y);
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist >= DIRECTION_DECIDE_DISTANCE) {
           if (dx > 0 && dy / dx >= VERTICAL_RATIO) {
-            // 수직 이동 → 스크롤로 판정, 제스처 포기
+            // 수직 이동 → 스크롤로 판정, 밀린 스크롤량 적용
             gesturePhaseRef.current = "scroll";
+            const scrollDelta = y - startPosRef.current.y;
+            el.scrollTop -= scrollDelta;
             circlePointsRef.current = [];
             return;
           }
           // 비수직 → 원 제스처 진행
           gesturePhaseRef.current = "gesture";
         }
-        return; // 아직 판별 안 됨 → 스크롤도 제스처도 아님
+        return;
       }
 
-      // gesture 단계: 스크롤 차단 + 누적 각도 체크
+      // gesture 단계: 스크롤 완전 차단 + 누적 각도 체크
       e.preventDefault();
       const angle = calcCumulativeAngle(circlePointsRef.current);
       if (angle >= CIRCLE_ANGLE_THRESHOLD) {
@@ -167,8 +173,7 @@ export function FriendList() {
       gesturePhaseRef.current = "idle";
     };
 
-    // passive: false → gesture 단계에서 preventDefault 가능
-    // pending/scroll 단계에서는 preventDefault를 호출하지 않으므로 스크롤 정상 동작
+    // passive: false → pending/gesture 단계에서 preventDefault 가능
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: true });
