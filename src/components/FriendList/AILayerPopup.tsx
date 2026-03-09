@@ -1413,11 +1413,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       {msg.role === "user" ? (
-                        <div className="max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[15px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
+                        <div className="max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
                           {msg.text}
                         </div>
                       ) : (
-                        <div className={`max-w-[75%] text-[15px] font-medium leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
+                        <div className={`max-w-[90%] text-[17px] font-medium leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
                           {msg.id === typingMessageId ? msg.text.slice(0, typingDisplayedLength) : msg.text}
                         </div>
                       )}
@@ -1426,7 +1426,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   {/* AI 응답 로딩 스켈레톤 */}
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
-                      <div className="max-w-[75%] flex flex-col gap-2">
+                      <div className="max-w-[90%] flex flex-col gap-2">
                         <div
                           className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
                           style={{ width: "85%" }}
