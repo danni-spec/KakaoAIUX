@@ -506,9 +506,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setTextSending(true);
       loadingTimerRef.current = setTimeout(() => {
         setTextSending(false);
-        setTextMode(false);
         doStop();
         setSummaryResult(null);
+        setChatMessages([]);
         setChoonsikCardView(true);
         setChoonsikFullscreen(true);
         textSendLockRef.current = false;
@@ -608,6 +608,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           setTranscript("");
           setInterimText("");
           setStatusMessage(null);
+          setChatMessages([]);
           setChoonsikCardView(true);
           setChoonsikFullscreen(true);
         } else {
@@ -903,16 +904,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       <>
-      {/* ── AI 레이어 카드 (상하 여백 60px) ── */}
+      {/* ── AI 레이어 카드 (bottom 고정, 위로 확장) ── */}
       <div
-        className="absolute left-4 right-4 transition-all duration-300"
+        className="absolute left-4 right-4 transition-all duration-500 flex flex-col justify-end"
         style={{
           top: (navActive || navArrived) ? 100 : undefined,
           bottom: isOpen ? 60 : -300,
+          maxHeight: choonsikFullscreen ? "calc(100% - 120px)" : undefined,
           opacity: isOpen && !minimized ? 1 : 0,
           transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
           pointerEvents: minimized ? "none" : "auto",
+          transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
         }}
       >
         <div className={`relative ${navActive || navArrived ? "h-full" : ""}`}>
@@ -975,27 +978,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 </div>
               )}
-              {/* 빈영역 센터: 춘식이 카드 / 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
+              {/* 빈영역 센터: 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
               <div
                 className="absolute inset-x-0 top-0 bottom-[72px] flex flex-col items-center justify-center gap-3 pointer-events-none"
-                style={{ opacity: (textMode || directionMode || darkmodeView || wishlistView) ? 0 : 1, visibility: (textMode || directionMode || darkmodeView || wishlistView) ? "hidden" : "visible" }}
+                style={{ opacity: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 1, visibility: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? "hidden" : "visible" }}
               >
-                {choonsikCardView ? (
-                  /* ── 춘식이 카드 (가로 180, 비율 270:373 유지, 라운드) ── */
-                  <div className="flex items-center justify-center w-full flex-1 pointer-events-auto">
-                    <img
-                      src="/card-choonsik.png"
-                      alt="춘식이"
-                      style={{
-                        width: 180,
-                        height: 249,
-                        objectFit: "cover",
-                        objectPosition: "center 38%",
-                        borderRadius: 16,
-                      }}
-                    />
-                  </div>
-                ) : summaryResult ? (
+                {summaryResult ? (
                   /* ── 대화 요약 결과 (보낸/받은 메시지 형식) ── */
                   <div className="w-full pl-6 pr-4 pt-4 pb-2 overflow-y-auto max-h-full pointer-events-auto">
                     {summaryResult.map((msg) => (
@@ -1541,9 +1529,39 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 </div>
               )}
 
+              {/* ── 춘식이 사원증 카드 (입력창 위, 아래에서 위로 확장) ── */}
+              {choonsikCardView && (
+                <div
+                  className="flex items-center justify-center w-full overflow-hidden transition-all duration-500"
+                  style={{
+                    maxHeight: choonsikFullscreen ? 500 : 0,
+                    opacity: choonsikFullscreen ? 1 : 0,
+                    paddingTop: choonsikFullscreen ? 16 : 0,
+                    paddingBottom: choonsikFullscreen ? 8 : 0,
+                    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                  }}
+                >
+                  <img
+                    src="/card-choonsik.png"
+                    alt="춘식이"
+                    className="transition-all duration-500"
+                    style={{
+                      width: 260,
+                      aspectRatio: "0.63 / 1",
+                      objectFit: "cover",
+                      borderRadius: 16,
+                      border: "none",
+                      outline: "none",
+                      boxShadow: "none",
+                      transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                    }}
+                  />
+                </div>
+              )}
+
               <div
                 className="px-4 pb-4 transition-all duration-[400ms]"
-                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 330 : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 <div
                   className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
@@ -1663,40 +1681,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       </>
-
-      {/* ── 사원증 풀스크린 카드 레이어 ── */}
-      {choonsikFullscreen && (
-        <div
-          className="fixed inset-0 grid place-items-center"
-          style={{ zIndex: 99999, background: "rgba(0,0,0,0.8)" }}
-          onClick={() => {
-            setChoonsikFullscreen(false);
-            setChoonsikCardView(false);
-          }}
-          onTouchEnd={(e) => {
-            e.stopPropagation();
-            setChoonsikFullscreen(false);
-            setChoonsikCardView(false);
-          }}
-        >
-          <img
-            src="/card-choonsik.png"
-            alt="사원증"
-            onClick={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            style={{
-              width: 260,
-              aspectRatio: "0.63 / 1",
-              objectFit: "cover",
-              borderRadius: 16,
-              border: "none",
-              outline: "none",
-              boxShadow: "none",
-              display: "block",
-            }}
-          />
-        </div>
-      )}
 
     </div>
   );
