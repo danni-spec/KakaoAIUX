@@ -1,5 +1,58 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { SquircleAvatar } from "./SquircleAvatar";
+
+// ── 채팅 메시지 타입 ──
+interface ChatMessage {
+  id: string;
+  role: "user" | "ai";
+  text: string;
+  timestamp: number;
+}
+
+// ── AI 응답 함수 (나중에 OpenAI API로 교체 가능) ──
+// API 연동 시 이 함수만 교체하면 됩니다:
+//   const OPENAI_API_KEY = "sk-...";
+//   async function getAIResponse(userMessage: string, _history: ChatMessage[]): Promise<string> {
+//     const res = await fetch("https://api.openai.com/v1/chat/completions", {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+//       body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: userMessage }] }),
+//     });
+//     const data = await res.json();
+//     return data.choices[0].message.content;
+//   }
+const AI_RESPONSES = [
+  "안녕하세요! 무엇이든 물어보세요 :)",
+  "좋은 질문이에요! 조금 더 자세히 말씀해주시면 더 잘 도와드릴 수 있어요.",
+  "네, 알겠습니다. 도와드릴게요!",
+  "흥미로운 질문이네요. 제가 알기로는...",
+  "카카오톡에서 다양한 기능을 활용해보세요!",
+  "더 궁금한 점이 있으시면 편하게 물어보세요.",
+  "확인해 볼게요. 잠시만 기다려주세요!",
+  "맞아요, 그렇게 하시면 됩니다.",
+];
+
+async function getAIResponse(userMessage: string, _history: ChatMessage[]): Promise<string> {
+  // 시뮬레이션: 1초 딜레이 후 랜덤 응답
+  await new Promise((r) => setTimeout(r, 1000));
+
+  // 간단한 키워드 매칭 응답
+  const lower = userMessage.toLowerCase();
+  if (lower.includes("안녕") || lower.includes("하이") || lower.includes("hello")) {
+    return "안녕하세요! 카나나입니다. 무엇을 도와드릴까요?";
+  }
+  if (lower.includes("날씨")) {
+    return "오늘 서울 날씨는 맑음, 기온 12°C예요. 외출할 때 가벼운 겉옷을 챙기세요!";
+  }
+  if (lower.includes("추천")) {
+    return "어떤 종류의 추천을 원하시나요? 맛집, 선물, 영화 등 구체적으로 말씀해주세요!";
+  }
+  if (lower.includes("고마워") || lower.includes("감사")) {
+    return "천만에요! 또 필요한 게 있으면 언제든 말씀해주세요 :)";
+  }
+
+  return AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)];
+}
 
 // Web Speech API 타입
 interface SpeechRecognitionEvent extends Event {
@@ -179,6 +232,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [darkmodeView, setDarkmodeView] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [aiTyping, setAiTyping] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const [nearDismiss, setNearDismiss] = useState(false);
   const nearDismissRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -199,6 +255,30 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     inputTextRef.current = val;
     _setInputText(val);
   }
+
+  // 채팅 메시지 추가 시 자동 스크롤
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
+    });
+  }, []);
+
+  // 채팅 메시지 전송 + AI 응답 시뮬레이션
+  const sendChatMessage = useCallback(async (text: string) => {
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
+    setChatMessages((prev) => [...prev, userMsg]);
+    scrollToBottom();
+    setAiTyping(true);
+
+    try {
+      const aiText = await getAIResponse(text, [...chatMessages, userMsg]);
+      const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
+      setChatMessages((prev) => [...prev, aiMsg]);
+    } finally {
+      setAiTyping(false);
+      scrollToBottom();
+    }
+  }, [chatMessages, scrollToBottom]);
 
   function clearSilenceTimer() {
     if (silenceTimerRef.current) {
@@ -347,8 +427,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         setDirectionDest(dest);
       }, 1500);
     } else {
-      // "send", "message", 기타 미매칭 → 모두 동일한 전송 플로우
-      doSendMessage();
+      // 명령어 미매칭 → 채팅 모드로 AI 대화
+      sendChatMessage(text);
     }
   }
 
@@ -523,6 +603,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setGiftResult(null);
       updateReplyMode(false);
       setSendStatus(null);
+      setChatMessages([]);
+      setAiTyping(false);
       setMinimized(false);
       setShowDismiss(false);
       setFloatPos(null);
@@ -1281,9 +1363,60 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 </div>
               )}
 
+              {/* ── 채팅 메시지 리스트 (textMode && 메시지 있을 때) ── */}
+              {textMode && chatMessages.length > 0 && !directionMode && !darkmodeView && !wishlistView && (
+                <div
+                  ref={chatScrollRef}
+                  className="overflow-y-auto scrollbar-hide px-4 pt-4 pb-2"
+                  style={{ maxHeight: 260 }}
+                >
+                  {chatMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      {msg.role === "ai" && (
+                        <div className="flex-shrink-0 mr-2 mt-1">
+                          <SquircleAvatar src="/kanana-avatar.png" alt="AI" className="w-7 h-7" />
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
+                          msg.role === "user"
+                            ? "bg-[#FEE500] text-[#191919] rounded-tr-md"
+                            : darkMode
+                              ? "bg-[#3a3a3c] text-gray-100 rounded-tl-md"
+                              : "bg-white text-[#191919] rounded-tl-md shadow-sm"
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  {/* AI 타이핑 인디케이터 */}
+                  {aiTyping && (
+                    <div className="flex justify-start mb-3">
+                      <div className="flex-shrink-0 mr-2 mt-1">
+                        <SquircleAvatar src="/kanana-avatar.png" alt="AI" className="w-7 h-7" />
+                      </div>
+                      <div className={`rounded-2xl rounded-tl-md px-4 py-3 ${darkMode ? "bg-[#3a3a3c]" : "bg-white shadow-sm"}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[13px] ${darkMode ? "text-gray-400" : "text-gray-500"}`}>카나나가 입력 중</span>
+                          <span className="flex gap-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-gray-400" : "bg-gray-400"}`} style={{ animation: "typing-dot 1.2s infinite", animationDelay: "0s" }} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-gray-400" : "bg-gray-400"}`} style={{ animation: "typing-dot 1.2s infinite", animationDelay: "0.2s" }} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-gray-400" : "bg-gray-400"}`} style={{ animation: "typing-dot 1.2s infinite", animationDelay: "0.4s" }} />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div
                 className="px-4 pb-4 transition-all duration-500"
-                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? 16 : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto" }}
+                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto" }}
               >
                 <div
                   className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
