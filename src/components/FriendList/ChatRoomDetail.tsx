@@ -264,7 +264,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`rounded-[16px] px-3 py-2 text-[14px] leading-relaxed ${
+                    className={`rounded-[16px] px-3 py-2 text-[15px] leading-relaxed ${
                       isMe
                         ? "bg-[#FEE500] text-[#191919]"
                         : darkMode
