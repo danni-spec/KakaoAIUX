@@ -91,58 +91,45 @@ export function FriendList() {
     flushSync(() => setAiPopupOpen(true));
   }, []);
 
-  // ── 원 제스처: 드래그 감지 → 오버레이 활성화 ──
-  const DRAG_THRESHOLD = 5; // 포인트 수가 이 이상이면 "제스처 중"으로 판정
-  const [gestureActive, setGestureActive] = useState(false);
+  // ── 원 제스처: passive 리스너로 스크롤 성능 보존 ──
+  const mainRef = useRef<HTMLElement>(null);
 
-  // 제스처 중 iOS 바운스 방지: body overflow 제어
   useEffect(() => {
-    if (gestureActive) {
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.width = "100%";
-    } else {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.width = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.width = "";
+    const el = mainRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      circlePointsRef.current = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }];
+      circleFiredRef.current = false;
     };
-  }, [gestureActive]);
 
-  // ── 원 제스처: 터치 ──
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    circlePointsRef.current = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }];
-    circleFiredRef.current = false;
-  }, []);
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
+    const onTouchMove = (e: TouchEvent) => {
       if (circleFiredRef.current) return;
       circlePointsRef.current.push({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-      // 일정 포인트 이상 → 제스처 중으로 판정, 오버레이 활성화
-      if (circlePointsRef.current.length === DRAG_THRESHOLD) {
-        setGestureActive(true);
-      }
       if (detectCircle(circlePointsRef.current)) {
         circleFiredRef.current = true;
         circlePointsRef.current = [];
-        setGestureActive(false);
         openAIPopup();
       }
-    },
-    [openAIPopup]
-  );
+    };
 
-  const handleTouchEnd = useCallback(() => {
-    circlePointsRef.current = [];
-    setGestureActive(false);
-  }, []);
+    const onTouchEnd = () => {
+      circlePointsRef.current = [];
+    };
 
-  // ── 원 제스처: 마우스 ──
+    // passive: true → 브라우저 네이티브 스크롤 최적화 유지
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [openAIPopup]);
+
+  // ── 원 제스처: 마우스 (데스크탑) ──
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     mouseDownRef.current = true;
@@ -155,14 +142,10 @@ export function FriendList() {
       if (!mouseDownRef.current || circleFiredRef.current) return;
       e.preventDefault();
       circlePointsRef.current.push({ x: e.clientX, y: e.clientY });
-      if (circlePointsRef.current.length === DRAG_THRESHOLD) {
-        setGestureActive(true);
-      }
       if (detectCircle(circlePointsRef.current)) {
         circleFiredRef.current = true;
         circlePointsRef.current = [];
         mouseDownRef.current = false;
-        setGestureActive(false);
         openAIPopup();
       }
     },
@@ -172,7 +155,6 @@ export function FriendList() {
   const handleMouseUp = useCallback(() => {
     mouseDownRef.current = false;
     circlePointsRef.current = [];
-    setGestureActive(false);
   }, []);
 
   return (
@@ -190,10 +172,9 @@ export function FriendList() {
       {/* pb-28: 플로팅 GNB 높이(≈60px) + bottom-3(12px) + 여유분 — 탑바·칩 포함 스크롤 */}
       {/* 원 제스처: 화면에 원을 그리면 AI 레이어 박스 노출 */}
       <main
+        ref={mainRef}
         className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide pb-28"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -241,53 +222,6 @@ export function FriendList() {
         friendName={giftPopupFriend.name}
         friendPhoto={giftPopupFriend.photo}
       />
-      {/* 제스처 활성 시 투명 오버레이: 스크롤·스와이프·탭 완전 차단 */}
-      {gestureActive && (
-        <div
-          className="fixed inset-0 z-[9999]"
-          style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
-          onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          onTouchMove={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // 오버레이 위에서도 제스처 포인트 수집 계속
-            if (circleFiredRef.current) return;
-            circlePointsRef.current.push({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-            if (detectCircle(circlePointsRef.current)) {
-              circleFiredRef.current = true;
-              circlePointsRef.current = [];
-              setGestureActive(false);
-              openAIPopup();
-            }
-          }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            circlePointsRef.current = [];
-            setGestureActive(false);
-          }}
-          onMouseMove={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!mouseDownRef.current || circleFiredRef.current) return;
-            circlePointsRef.current.push({ x: e.clientX, y: e.clientY });
-            if (detectCircle(circlePointsRef.current)) {
-              circleFiredRef.current = true;
-              circlePointsRef.current = [];
-              mouseDownRef.current = false;
-              setGestureActive(false);
-              openAIPopup();
-            }
-          }}
-          onMouseUp={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            mouseDownRef.current = false;
-            circlePointsRef.current = [];
-            setGestureActive(false);
-          }}
-        />
-      )}
     </div>
   );
 }
