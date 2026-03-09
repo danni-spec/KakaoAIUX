@@ -39,7 +39,7 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[]): Prom
   // 간단한 키워드 매칭 응답
   const lower = userMessage.toLowerCase();
   if (lower.includes("안녕") || lower.includes("하이") || lower.includes("hello")) {
-    return "안녕하세요! 카나나입니다. 무엇을 도와드릴까요?";
+    return "안녕하세요! 카나나예요. 반가워요 😊 저는 카카오톡 안에서 여러분의 일상을 더 편하고 재미있게 만들어 드리는 AI 어시스턴트예요. 대화 요약, 선물 추천, 길 찾기, 다크 모드 전환 같은 것들을 도와드릴 수 있어요. 무엇이든 편하게 물어보세요!";
   }
   if (lower.includes("날씨")) {
     return "오늘 서울 날씨는 맑음, 기온 12°C예요. 외출할 때 가벼운 겉옷을 챙기세요!";
@@ -234,6 +234,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiTyping, setAiTyping] = useState(false);
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+  const [typingDisplayedLength, setTypingDisplayedLength] = useState(0);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [nearDismiss, setNearDismiss] = useState(false);
   const nearDismissRef = useRef(false);
@@ -241,6 +243,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const dragOffsetRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const replyModeRef = useRef(false);
   const inputTextRef = useRef("");
+  const textSendLockRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const activeRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -263,22 +266,42 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     });
   }, []);
 
-  // 채팅 메시지 전송 + AI 응답 시뮬레이션
+  // 채팅 메시지 전송 + AI 응답 시뮬레이션 (질문마다 이전 대화 리셋)
   const sendChatMessage = useCallback(async (text: string) => {
     const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
-    setChatMessages((prev) => [...prev, userMsg]);
+    setChatMessages([userMsg]);
+    setTypingMessageId(null);
     scrollToBottom();
     setAiTyping(true);
 
     try {
-      const aiText = await getAIResponse(text, [...chatMessages, userMsg]);
+      const aiText = await getAIResponse(text, [userMsg]);
       const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
       setChatMessages((prev) => [...prev, aiMsg]);
-    } finally {
       setAiTyping(false);
-      scrollToBottom();
+      setTypingMessageId(aiMsg.id);
+      setTypingDisplayedLength(0);
+    } catch {
+      setAiTyping(false);
     }
-  }, [chatMessages, scrollToBottom]);
+  }, [scrollToBottom]);
+
+  // AI 응답 타이핑 효과
+  useEffect(() => {
+    if (!typingMessageId || typingDisplayedLength < 0) return;
+    const msg = chatMessages.find((m) => m.id === typingMessageId && m.role === "ai");
+    if (!msg) return;
+    const fullLen = msg.text.length;
+    scrollToBottom();
+    if (typingDisplayedLength >= fullLen) {
+      setTypingMessageId(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      setTypingDisplayedLength((prev) => Math.min(prev + 1, fullLen));
+    }, 35);
+    return () => clearTimeout(t);
+  }, [typingMessageId, typingDisplayedLength, chatMessages, scrollToBottom]);
 
   function clearSilenceTimer() {
     if (silenceTimerRef.current) {
@@ -375,11 +398,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   }
 
   function handleTextSend() {
+    if (textSendLockRef.current) return;
     const text = inputText.trim();
     if (!text) return;
+    textSendLockRef.current = true;
     // replyMode일 때는 명령어 매칭 없이 바로 전송 플로우
     if (replyMode) {
       doSendMessage();
+      setTimeout(() => { textSendLockRef.current = false; }, 1500);
       return;
     }
     const action = matchCommand(text);
@@ -391,6 +417,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         setTextSending(false);
         setTextMode(false);
         setSummaryResult(CHAT_SUMMARY);
+        textSendLockRef.current = false;
       }, 1500);
     } else if (action === "gift") {
       setTextSending(true);
@@ -405,6 +432,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         setTranscript("");
         setInterimText("");
         setStatusMessage(null);
+        textSendLockRef.current = false;
       }, 1500);
     } else if (action === "darkmode") {
       setTextSending(true);
@@ -414,6 +442,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         setTextMode(false);
         doStop();
         setDarkmodeView(true);
+        textSendLockRef.current = false;
       }, 1500);
     } else if (action === "navigation") {
       const dest = extractDestination(text);
@@ -425,10 +454,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         doStop();
         setDirectionMode(true);
         setDirectionDest(dest);
+        textSendLockRef.current = false;
       }, 1500);
     } else {
       // 명령어 미매칭 → 채팅 모드로 AI 대화
-      sendChatMessage(text);
+      sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
     }
   }
 
@@ -1364,59 +1394,61 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               )}
 
               {/* ── 채팅 메시지 리스트 (textMode && 메시지 있을 때) ── */}
-              {textMode && chatMessages.length > 0 && !directionMode && !darkmodeView && !wishlistView && (
+              {textMode && !directionMode && !darkmodeView && !wishlistView && (
                 <div
-                  ref={chatScrollRef}
-                  className="overflow-y-auto scrollbar-hide px-4 pt-4 pb-2"
-                  style={{ maxHeight: 260 }}
+                  className="overflow-hidden transition-all duration-400"
+                  style={{
+                    maxHeight: chatMessages.length > 0 ? 240 : 0,
+                    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                  }}
                 >
+                  <div
+                    ref={chatScrollRef}
+                    className="overflow-y-auto scrollbar-hide pl-6 pr-4 pt-4 pb-2"
+                    style={{ height: 240 }}
+                  >
                   {chatMessages.map((msg) => (
                     <div
                       key={msg.id}
                       className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      {msg.role === "ai" && (
-                        <div className="flex-shrink-0 mr-2 mt-1">
-                          <SquircleAvatar src="/kanana-avatar.png" alt="AI" className="w-7 h-7" />
+                      {msg.role === "user" ? (
+                        <div className="max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[15px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
+                          {msg.text}
+                        </div>
+                      ) : (
+                        <div className={`max-w-[75%] text-[15px] font-medium leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
+                          {msg.id === typingMessageId ? msg.text.slice(0, typingDisplayedLength) : msg.text}
                         </div>
                       )}
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
-                          msg.role === "user"
-                            ? "bg-[#FEE500] text-[#191919] rounded-tr-md"
-                            : darkMode
-                              ? "bg-[#3a3a3c] text-gray-100 rounded-tl-md"
-                              : "bg-white text-[#191919] rounded-tl-md shadow-sm"
-                        }`}
-                      >
-                        {msg.text}
-                      </div>
                     </div>
                   ))}
-                  {/* AI 타이핑 인디케이터 */}
+                  {/* AI 응답 로딩 스켈레톤 */}
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
-                      <div className="flex-shrink-0 mr-2 mt-1">
-                        <SquircleAvatar src="/kanana-avatar.png" alt="AI" className="w-7 h-7" />
-                      </div>
-                      <div className={`rounded-2xl rounded-tl-md px-4 py-3 ${darkMode ? "bg-[#3a3a3c]" : "bg-white shadow-sm"}`}>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[13px] ${darkMode ? "text-gray-400" : "text-gray-500"}`}>카나나가 입력 중</span>
-                          <span className="flex gap-0.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-gray-400" : "bg-gray-400"}`} style={{ animation: "typing-dot 1.2s infinite", animationDelay: "0s" }} />
-                            <span className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-gray-400" : "bg-gray-400"}`} style={{ animation: "typing-dot 1.2s infinite", animationDelay: "0.2s" }} />
-                            <span className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-gray-400" : "bg-gray-400"}`} style={{ animation: "typing-dot 1.2s infinite", animationDelay: "0.4s" }} />
-                          </span>
-                        </div>
+                      <div className="max-w-[75%] flex flex-col gap-2">
+                        <div
+                          className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
+                          style={{ width: "85%" }}
+                        />
+                        <div
+                          className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
+                          style={{ width: "60%" }}
+                        />
+                        <div
+                          className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
+                          style={{ width: "45%" }}
+                        />
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               )}
 
               <div
-                className="px-4 pb-4 transition-all duration-500"
-                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto" }}
+                className="px-4 pb-4 transition-all duration-[400ms]"
+                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 <div
                   className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
@@ -1456,7 +1488,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       disabled={textSending || !!sendStatus}
                       onFocus={() => setTextMode(true)}
                       onChange={(e) => updateInputText(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleTextSend(); } }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); handleTextSend(); } }}
                     />
                   </label>
                   {(textMode || replyMode) && inputText.trim() ? (
