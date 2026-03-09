@@ -1,6 +1,6 @@
 {
-  "name": "카카오톡",
-  "short_name": "카카오톡",
+  "name": "KakaoAIUX",
+  "short_name": "KakaoAIUX",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

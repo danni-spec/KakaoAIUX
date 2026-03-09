@@ -143,7 +143,15 @@ export function FriendList() {
   }, []);
 
   return (
-    <div className={`h-full flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}>
+    <div
+      className={`h-full flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
       <SquircleClipDef />
       <StatusBar darkMode={darkMode} />
       {/* pb-28: 플로팅 GNB 높이(≈60px) + bottom-3(12px) + 여유분 — 탑바·칩 포함 스크롤 */}
