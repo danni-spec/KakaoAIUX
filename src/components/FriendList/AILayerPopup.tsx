@@ -39,7 +39,7 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[]): Prom
   // 간단한 키워드 매칭 응답
   const lower = userMessage.toLowerCase();
   if (lower.includes("안녕") || lower.includes("하이") || lower.includes("hello")) {
-    return "안녕하세요! 카나나예요. 반가워요 😊 저는 카카오톡 안에서 여러분의 일상을 더 편하고 재미있게 만들어 드리는 AI 어시스턴트예요. 대화 요약, 선물 추천, 길 찾기, 다크 모드 전환 같은 것들을 도와드릴 수 있어요. 무엇이든 편하게 물어보세요!";
+    return "안녕하세요! 카나나예요 😊 저는 카카오톡 안에서 여러분의 일상을 더 편하고 재미있게 만들어 드리는 AI 어시스턴트예요. 대화 요약, 선물 추천, 길 찾기, 다크 모드 전환 같은 것들을 도와드릴 수 있어요. 무엇이든 편하게 물어보세요!";
   }
   if (lower.includes("날씨")) {
     return "오늘 서울 날씨는 맑음, 기온 12°C예요. 외출할 때 가벼운 겉옷을 챙기세요!";
@@ -49,6 +49,9 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[]): Prom
   }
   if (lower.includes("고마워") || lower.includes("감사")) {
     return "천만에요! 또 필요한 게 있으면 언제든 말씀해주세요 :)";
+  }
+  if (lower.includes("대화 요약") || lower.includes("메시지 요약") || lower.includes("요약해")) {
+    return "토요일 저녁 7시에 판교역 근처에서 같이 밥 먹기로 함. 오기 전에 집에 들러서 쿠폰 꼭 챙겨오라고 함. 맛집 후보로 파스타집이랑 초밥집 중에 고르는 중. 가는 길에 해수 사무실 들러서 픽업하기로 함.";
   }
 
   return AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)];
@@ -102,11 +105,8 @@ const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
   { keywords: ["선물", "선물하기", "선물 보내", "선물 추천", "생일 선물"], action: "gift" },
   { keywords: ["가는 길", "어떻게 가", "길 찾기", "지도", "네비", "경로"], action: "navigation" },
   { keywords: ["전송", "보내", "보내줘"], action: "send" },
+  { keywords: ["사원증"], action: "choonsik-card" },
 ];
-
-const B = ({ children }: { children: React.ReactNode }) => (
-  <span className="font-bold">{children}</span>
-);
 
 interface NavStep {
   instruction: string;
@@ -155,18 +155,45 @@ function extractGiftRecipient(text: string): string {
   return "친구";
 }
 
-const CHAT_SUMMARY: React.ReactNode[] = [
-  <>토요일 저녁 7시에 판교역 근처에서 <B>같이 밥 먹기로 함</B></>,
-  <>오기 전에 집에 들러서 <B>쿠폰 꼭 챙겨</B>오라고 함</>,
-  <><B>맛집 후보</B>로 파스타집이랑 초밥집 중에 <B>고르는 중</B></>,
-  <>가는 길에 해수 <B>사무실 들러서 픽업</B>하기로 함</>,
+const CHAT_BOLD_PARTS = [
+  "대화 요약, 선물 추천, 길 찾기, 다크 모드 전환",
+  "집에 들러서 쿠폰 꼭 챙겨오라고 함",
 ];
+
+function renderChatWithBold(display: string): React.ReactNode {
+  const result: React.ReactNode[] = [];
+  let text = display;
+  while (true) {
+    let first = { index: -1, length: 0, text: "" };
+    for (const part of CHAT_BOLD_PARTS) {
+      const idx = text.indexOf(part);
+      if (idx !== -1 && (first.index === -1 || idx < first.index)) {
+        first = { index: idx, length: part.length, text: part };
+      }
+    }
+    if (first.index === -1) {
+      result.push(text);
+      break;
+    }
+    result.push(text.slice(0, first.index));
+    result.push(<span key={`${first.index}-${result.length}`} className="font-semibold">{first.text}</span>);
+    text = text.slice(first.index + first.length);
+  }
+  return <>{result}</>;
+}
 
 function matchCommand(text: string): string | null {
   const normalized = text.trim().toLowerCase();
   for (const cmd of VOICE_COMMANDS) {
     if (cmd.keywords.some((kw) => normalized.includes(kw))) return cmd.action;
   }
+  return null;
+}
+
+function parseDarkModeIntent(text: string): boolean | null {
+  const t = text.trim();
+  if (/켜|실행|켜줘|켜줘요|켜주세요/.test(t)) return true;
+  if (/꺼|꺼줘|꺼줘요|꺼주세요/.test(t)) return false;
   return null;
 }
 
@@ -216,7 +243,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [inputText, _setInputText] = useState("");
   const [textSending, setTextSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<string | null>(null);
-  const [summaryResult, setSummaryResult] = useState<React.ReactNode[] | null>(null);
+  const [summaryResult, setSummaryResult] = useState<ChatMessage[] | null>(null);
   const [giftResult, setGiftResult] = useState<string | null>(null);
   const [replyMode, _setReplyMode] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -230,6 +257,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [navProgress, setNavProgress] = useState(0);
   const [navArrived, setNavArrived] = useState(false);
   const [darkmodeView, setDarkmodeView] = useState(false);
+  const [choonsikCardView, setChoonsikCardView] = useState(false);
+  const [choonsikFullscreen, setChoonsikFullscreen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -275,7 +304,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     setAiTyping(true);
 
     try {
-      const aiText = await getAIResponse(text, [userMsg]);
+      const [aiText] = await Promise.all([
+        getAIResponse(text, [userMsg]),
+        new Promise<void>((r) => setTimeout(r, 3000)),
+      ]);
       const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
       setChatMessages((prev) => [...prev, aiMsg]);
       setAiTyping(false);
@@ -364,6 +396,19 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     setNavArrived(false);
     setDirectionMode(false);
     setDirectionDest("");
+    resetToDefaultView();
+  }
+
+  function resetToDefaultView() {
+    setChatMessages([]);
+    setTextMode(false);
+    setSummaryResult(null);
+    setGiftResult(null);
+    setChoonsikCardView(false);
+    updateInputText("");
+    setTypingMessageId(null);
+    setAiTyping(false);
+    inputRef.current?.blur();
   }
 
   function doSendMessage() {
@@ -411,14 +456,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     const action = matchCommand(text);
     updateInputText("");
     if (action === "chat-summary") {
-      setTextSending(true);
-      inputRef.current?.blur();
-      loadingTimerRef.current = setTimeout(() => {
-        setTextSending(false);
-        setTextMode(false);
-        setSummaryResult(CHAT_SUMMARY);
-        textSendLockRef.current = false;
-      }, 1500);
+      sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
     } else if (action === "gift") {
       setTextSending(true);
       inputRef.current?.blur();
@@ -428,6 +466,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         setGiftResult(recipient);
         setWishlistView(true);
         setTextMode(false);
+        setChoonsikCardView(false);
         doStop();
         setTranscript("");
         setInterimText("");
@@ -435,14 +474,19 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         textSendLockRef.current = false;
       }, 1500);
     } else if (action === "darkmode") {
+      const darkIntent = parseDarkModeIntent(text);
       setTextSending(true);
       inputRef.current?.blur();
       loadingTimerRef.current = setTimeout(() => {
         setTextSending(false);
         setTextMode(false);
+        setChoonsikCardView(false);
         doStop();
         setDarkmodeView(true);
         textSendLockRef.current = false;
+        if (darkIntent !== null) {
+          setTimeout(() => onDarkModeToggle(darkIntent), 350);
+        }
       }, 1500);
     } else if (action === "navigation") {
       const dest = extractDestination(text);
@@ -451,9 +495,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       loadingTimerRef.current = setTimeout(() => {
         setTextSending(false);
         setTextMode(false);
+        setChoonsikCardView(false);
         doStop();
         setDirectionMode(true);
         setDirectionDest(dest);
+        textSendLockRef.current = false;
+      }, 1500);
+    } else if (action === "choonsik-card") {
+      inputRef.current?.blur();
+      setTextSending(true);
+      loadingTimerRef.current = setTimeout(() => {
+        setTextSending(false);
+        setTextMode(false);
+        doStop();
+        setSummaryResult(null);
+        setChoonsikCardView(true);
+        setChoonsikFullscreen(true);
         textSendLockRef.current = false;
       }, 1500);
     } else {
@@ -513,12 +570,19 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       loadingTimerRef.current = setTimeout(() => {
         setIsLoading(false);
         if (action === "chat-summary") {
-          setSummaryResult(CHAT_SUMMARY);
+          doStop();
+          setTranscript("");
+          setInterimText("");
+          setStatusMessage(null);
+          setChoonsikCardView(false);
+          setTextMode(true);
+          sendChatMessage(text);
         } else if (action === "gift") {
           const recipient = extractGiftRecipient(text);
           setGiftResult(recipient);
           setWishlistView(true);
           setTextMode(false);
+          setChoonsikCardView(false);
           setTranscript("");
           setInterimText("");
           setStatusMessage(null);
@@ -527,11 +591,25 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         } else if (action === "send" && (replyModeRef.current || inputTextRef.current.trim())) {
           doSendMessage();
         } else if (action === "darkmode") {
+          const darkIntent = parseDarkModeIntent(text);
+          setChoonsikCardView(false);
           setDarkmodeView(true);
+          if (darkIntent !== null) {
+            setTimeout(() => onDarkModeToggle(darkIntent), 350);
+          }
         } else if (action === "navigation") {
           const dest = extractDestination(text);
+          setChoonsikCardView(false);
           setDirectionMode(true);
           setDirectionDest(dest);
+        } else if (action === "choonsik-card") {
+          doStop();
+          inputRef.current?.blur();
+          setTranscript("");
+          setInterimText("");
+          setStatusMessage(null);
+          setChoonsikCardView(true);
+          setChoonsikFullscreen(true);
         } else {
           // 미처리 액션 → 보이스 리스닝 복귀
           setStatusMessage(null);
@@ -650,6 +728,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setNavProgress(0);
       setNavArrived(false);
       setDarkmodeView(false);
+      setChoonsikCardView(false);
+      setChoonsikFullscreen(false);
       setWishlistView(false);
       setWishlistPhase("product");
       updateInputText("");
@@ -668,6 +748,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   }, [isOpen, textMode, directionMode, darkmodeView, wishlistView]);
 
   const draggingRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const wasDraggedRef = useRef(false);
 
@@ -689,6 +770,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     dragOffsetRef.current = { dx: mouseRelX - elCenterX, dy: mouseRelY - elCenterY };
     draggingRef.current = true;
     wasDraggedRef.current = false;
+    setFloatPos({ x: mouseRelX - dragOffsetRef.current.dx, y: mouseRelY - dragOffsetRef.current.dy });
+    setIsDragging(true);
     longPressTimerRef.current = setTimeout(() => {
       setShowDismiss(true);
       wasDraggedRef.current = true;
@@ -697,6 +780,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
   function moveDrag(clientX: number, clientY: number) {
     if (!draggingRef.current) return;
+    setIsDragging(true);
     const cr = containerRef.current?.getBoundingClientRect();
     if (!cr) return;
     const relX = clientX - cr.left - dragOffsetRef.current.dx;
@@ -716,6 +800,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     cancelLongPress();
     if (!draggingRef.current) { return; }
     draggingRef.current = false;
+    setIsDragging(false);
     if (nearDismissRef.current) {
       setDismissing(true);
       setNearDismiss(false);
@@ -741,6 +826,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     startLongPress(e.touches[0].clientX, e.touches[0].clientY, e.currentTarget as HTMLElement);
   }
   function handleFloatTouchMove(e: React.TouchEvent) {
+    e.preventDefault();
     moveDrag(e.touches[0].clientX, e.touches[0].clientY);
   }
   function handleFloatTouchEnd() { endDrag(); }
@@ -793,10 +879,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       )}
       {/* ── 미니 플로팅 버튼 (항상 렌더, minimized일 때 표시) ── */}
       <div
-        className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer transition-all duration-400 ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
+        className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer select-none touch-none ${isDragging ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
         style={floatPos
-          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s" }
-          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s" }
+          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none" }
+          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none" }
         }
         onClick={() => { if (wasDraggedRef.current) { wasDraggedRef.current = false; return; } if (!showDismiss && !draggingRef.current) { setMinimized(false); setFloatPos(null); } }}
         onTouchStart={handleFloatTouchStart}
@@ -817,12 +903,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       <>
-      {/* ── AI 레이어 카드 (키보드 바로 위) ── */}
+      {/* ── AI 레이어 카드 (상하 여백 60px) ── */}
       <div
         className="absolute left-4 right-4 transition-all duration-300"
         style={{
           top: (navActive || navArrived) ? 100 : undefined,
-          bottom: isOpen ? 16 : -300,
+          bottom: isOpen ? 60 : -300,
           opacity: isOpen && !minimized ? 1 : 0,
           transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
@@ -850,33 +936,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
-              {/* 카드 우상단 버튼 그룹 */}
-              <div className="absolute z-10 flex items-center gap-2" style={{ top: 16, right: 16 }}>
-                {summaryResult && !textMode && (
+              {/* ── 우상단 내리기 버튼 (텍스트 모드에서는 숨김) ── */}
+              {!textMode && (
+                <div className="absolute z-10 flex items-center gap-2" style={{ top: 16, right: 16 }}>
                   <button
-                    className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8]"
-                    style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
-                    aria-label="메시지 보내기"
-                    onClick={() => { setSummaryResult(null); updateReplyMode(true); doStart(); }}
-                  >
-                    <svg className={`w-[18px] h-[18px] ${darkMode ? "text-gray-200" : "text-[#3C1E1E]"}`} viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.04 2 11c0 3.16 1.96 5.94 4.9 7.55L5.2 22.5l4.95-2.47C10.74 19.94 11.36 20 12 20c5.52 0 10-4.04 10-9s-4.48-9-10-9z" />
-                    </svg>
-                  </button>
-                )}
-                {!wishlistView && !textMode && (summaryResult || giftResult || (listening && !isLoading && !statusMessage)) && (
-                  <button
-                    className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8]"
+                    type="button"
+                    className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
                     style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
                     aria-label="접기"
-                    onClick={() => setMinimized(true)}
+                    onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
                   >
                     <svg className={`w-5 h-5 ${darkMode ? "text-gray-200" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
               {/* ── 위시리스트 캐로셀 (giftResult, textMode에서 카드 상단에 표시) ── */}
               {giftResult && textMode && (
                 <div className="w-full px-4 pt-4 pb-2 pointer-events-auto">
@@ -900,29 +975,49 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 </div>
               )}
-              {/* 빈영역 센터: 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
+              {/* 빈영역 센터: 춘식이 카드 / 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
               <div
                 className="absolute inset-x-0 top-0 bottom-[72px] flex flex-col items-center justify-center gap-3 pointer-events-none"
                 style={{ opacity: (textMode || directionMode || darkmodeView || wishlistView) ? 0 : 1, visibility: (textMode || directionMode || darkmodeView || wishlistView) ? "hidden" : "visible" }}
               >
-                {summaryResult ? (
-                  /* ── 대화 요약 결과 ── */
-                  <div className="w-full px-5 pt-1 overflow-y-auto max-h-full pointer-events-auto">
-                    <div className="flex items-center gap-2.5 mb-6">
-                      <SquircleAvatar src="/profile-jieun.png" alt="이해수" className="w-8 h-8" />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[14px] font-bold leading-tight ${darkMode ? "text-gray-100" : "text-gray-900"}`}>이해수 ❤️</p>
-                        <p className="text-[11px]" style={{ color: darkMode ? "rgba(255,255,255,0.5)" : "rgba(25,25,25,0.6)" }}>오늘 오후 2:34 · 메시지 12개</p>
+                {choonsikCardView ? (
+                  /* ── 춘식이 카드 (가로 180, 비율 270:373 유지, 라운드) ── */
+                  <div className="flex items-center justify-center w-full flex-1 pointer-events-auto">
+                    <img
+                      src="/card-choonsik.png"
+                      alt="춘식이"
+                      style={{
+                        width: 180,
+                        height: 249,
+                        objectFit: "cover",
+                        objectPosition: "center 38%",
+                        borderRadius: 16,
+                      }}
+                    />
+                  </div>
+                ) : summaryResult ? (
+                  /* ── 대화 요약 결과 (보낸/받은 메시지 형식) ── */
+                  <div className="w-full pl-6 pr-4 pt-4 pb-2 overflow-y-auto max-h-full pointer-events-auto">
+                    {summaryResult.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        {msg.role === "user" ? (
+                          <div className="max-w-[75%] rounded-[18px] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
+                            {msg.text}
+                          </div>
+                        ) : (
+                          <div className={`max-w-[90%] text-[17px] font-normal leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
+                            {msg.id === "sum-a-1" ? (
+                              <>토요일 저녁 7시에 판교역 근처에서 같이 밥 먹기로 함. 오기 전에 <span className="font-semibold">집에 들러서 쿠폰 꼭 챙겨오라고 함</span>. 맛집 후보로 파스타집이랑 초밥집 중에 고르는 중. 가는 길에 해수 사무실 들러서 픽업하기로 함.</>
+                            ) : (
+                              msg.text
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <ul className="space-y-1">
-                      {summaryResult.map((item, i) => (
-                        <li key={i} className="flex gap-2">
-                          <span className="text-[13px] text-gray-400 mt-0.5 flex-shrink-0">•</span>
-                          <span className={`text-[14px] leading-snug ${darkMode ? "text-gray-200" : "text-gray-800"}`}>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    ))}
                   </div>
                 ) : isLoading ? (
                   /* ── 로딩 스피너 ── */
@@ -957,7 +1052,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     />
                   </div>
                 )}
-                {!summaryResult && (listening || isLoading || statusMessage || transcript || interimText) && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
+                {!summaryResult && !choonsikCardView && (listening || isLoading || statusMessage || transcript || interimText) && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
                   style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#1C1C1E") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#a1a1aa" : "#374151") }}
                 >
                   {isLoading
@@ -989,7 +1084,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         type="button"
                         className="flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold text-gray-700 active:opacity-80"
                         style={{ background: "rgba(0,0,0,0.06)" }}
-                        onClick={() => { setDirectionMode(false); setDirectionDest(""); }}
+                        onClick={() => { resetToDefaultView(); setDirectionMode(false); setDirectionDest(""); doStart(); }}
                       >
                         카카오맵
                       </button>
@@ -1254,7 +1349,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     type="button"
                     className={`w-full h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors duration-500 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                     style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
-                    onClick={() => setDarkmodeView(false)}
+                    onClick={() => { resetToDefaultView(); setDarkmodeView(false); doStart(); }}
                   >
                     완료
                   </button>
@@ -1319,7 +1414,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           type="button"
                           className={`flex-1 h-[40px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
-                          onClick={() => { setWishlistView(false); setGiftResult(null); setWishlistPhase("product"); doStart(); }}
+                          onClick={() => { resetToDefaultView(); setWishlistView(false); setGiftResult(null); setWishlistPhase("product"); doStart(); }}
                         >
                           선물하기 홈
                         </button>
@@ -1377,14 +1472,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           type="button"
                           className={`flex-1 h-[40px] rounded-[40px] text-[14px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
-                          onClick={() => { setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
+                          onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
                         >
                           친구와 1:1 채팅
                         </button>
                         <button
                           type="button"
                           className={`flex-1 h-[40px] rounded-[40px] text-[14px] font-semibold active:bg-[#333] transition-colors ${darkMode ? "text-black bg-[#FEE500]" : "text-white bg-[#191919]"}`}
-                          onClick={() => { setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
+                          onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
                         >
                           확인
                         </button>
@@ -1413,31 +1508,31 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       {msg.role === "user" ? (
-                        <div className="max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
+                        <div className="max-w-[75%] rounded-[18px] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
                           {msg.text}
                         </div>
                       ) : (
-                        <div className={`max-w-[90%] text-[17px] font-medium leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
-                          {msg.id === typingMessageId ? msg.text.slice(0, typingDisplayedLength) : msg.text}
+                        <div className={`max-w-[90%] text-[17px] font-normal leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
+                          {renderChatWithBold(msg.id === typingMessageId ? msg.text.slice(0, typingDisplayedLength) : msg.text)}
                         </div>
                       )}
                     </div>
                   ))}
-                  {/* AI 응답 로딩 스켈레톤 */}
+                  {/* AI 응답 로딩 (점 3개 애니메이션) */}
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
-                      <div className="max-w-[90%] flex flex-col gap-2">
-                        <div
-                          className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
-                          style={{ width: "85%" }}
+                      <div className={`flex items-center gap-1.5 py-2`}>
+                        <span
+                          className="w-2 h-2 rounded-full bg-pink-500"
+                          style={{ animation: "typing-dot 1.2s ease-in-out infinite" }}
                         />
-                        <div
-                          className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
-                          style={{ width: "60%" }}
+                        <span
+                          className="w-2 h-2 rounded-full bg-pink-500"
+                          style={{ animation: "typing-dot 1.2s ease-in-out infinite", animationDelay: "0.15s" }}
                         />
-                        <div
-                          className={`h-4 rounded-full animate-pulse ${darkMode ? "bg-gray-600" : "bg-gray-300"}`}
-                          style={{ width: "45%" }}
+                        <span
+                          className="w-2 h-2 rounded-full bg-pink-500"
+                          style={{ animation: "typing-dot 1.2s ease-in-out infinite", animationDelay: "0.3s" }}
                         />
                       </div>
                     </div>
@@ -1448,7 +1543,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               <div
                 className="px-4 pb-4 transition-all duration-[400ms]"
-                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 330 : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 <div
                   className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
@@ -1488,7 +1583,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       disabled={textSending || !!sendStatus}
                       onFocus={() => setTextMode(true)}
                       onChange={(e) => updateInputText(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); handleTextSend(); } }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (e.nativeEvent.isComposing) {
+                            const input = e.currentTarget;
+                            const sendAfterComposition = () => {
+                              input.removeEventListener("compositionend", sendAfterComposition);
+                              handleTextSend();
+                            };
+                            input.addEventListener("compositionend", sendAfterComposition, { once: true });
+                          } else {
+                            handleTextSend();
+                          }
+                        }
+                      }}
                     />
                   </label>
                   {(textMode || replyMode) && inputText.trim() ? (
@@ -1518,8 +1628,17 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         e.stopPropagation();
                         if (textSending || sendStatus) return;
                         if (textMode) {
+                          setChatMessages([]);
                           setTextMode(false);
+                          setChoonsikCardView(false);
+                          updateInputText("");
+                          setTypingMessageId(null);
+                          setAiTyping(false);
+                          setTranscript("");
+                          setInterimText("");
+                          setStatusMessage(null);
                           inputRef.current?.blur();
+                          doStart();
                         } else {
                           setTextMode(true);
                           inputRef.current?.focus({ preventScroll: true });
@@ -1544,6 +1663,40 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       </>
+
+      {/* ── 사원증 풀스크린 카드 레이어 ── */}
+      {choonsikFullscreen && (
+        <div
+          className="fixed inset-0 grid place-items-center"
+          style={{ zIndex: 99999, background: "rgba(0,0,0,0.8)" }}
+          onClick={() => {
+            setChoonsikFullscreen(false);
+            setChoonsikCardView(false);
+          }}
+          onTouchEnd={(e) => {
+            e.stopPropagation();
+            setChoonsikFullscreen(false);
+            setChoonsikCardView(false);
+          }}
+        >
+          <img
+            src="/card-choonsik.png"
+            alt="사원증"
+            onClick={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            style={{
+              width: 260,
+              aspectRatio: "0.63 / 1",
+              objectFit: "cover",
+              borderRadius: 16,
+              border: "none",
+              outline: "none",
+              boxShadow: "none",
+              display: "block",
+            }}
+          />
+        </div>
+      )}
 
     </div>
   );
