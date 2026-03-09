@@ -52,26 +52,25 @@ function SquircleClipDef() {
 type GesturePhase = "idle" | "pending" | "gesture" | "scroll";
 
 const CIRCLE_ANGLE_THRESHOLD = 252; // 원의 70% = 252°
-const DIRECTION_DECIDE_DISTANCE = 12; // px: 이 거리 이상 이동 시 방향 판별
-const VERTICAL_RATIO = 2.0; // dy/dx 비율이 이 이상이면 수직 스크롤로 판정
+const DIRECTION_DECIDE_DISTANCE = 10; // px: 이 거리 이상 이동 시 방향 판별
+const VERTICAL_RATIO = 1.8; // dy/dx 비율이 이 이상이면 수직 스크롤로 판정
 const MIN_POINTS_FOR_ANGLE = 8; // 누적 각도 계산 최소 포인트 수
 
-/** 누적 각도 계산: 연속 포인트 간 중심 기준 각도 변화의 절대합 */
-function calcCumulativeAngle(points: { x: number; y: number }[]): number {
-  if (points.length < MIN_POINTS_FOR_ANGLE) return 0;
-  const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
-  const cy = points.reduce((s, p) => s + p.y, 0) / points.length;
-  let total = 0;
-  for (let i = 1; i < points.length; i++) {
-    const a1 = Math.atan2(points[i - 1].y - cy, points[i - 1].x - cx);
-    const a2 = Math.atan2(points[i].y - cy, points[i].x - cx);
-    let delta = a2 - a1;
-    // -π ~ π 범위로 정규화
-    if (delta > Math.PI) delta -= 2 * Math.PI;
-    if (delta < -Math.PI) delta += 2 * Math.PI;
-    total += delta;
-  }
-  return Math.abs(total) * (180 / Math.PI); // 도 단위
+/** 누적 각도 계산 — 증분 업데이트용 (전체 재계산 없이 마지막 포인트만 추가) */
+function calcIncrementalAngle(
+  points: { x: number; y: number }[],
+  prevAngle: number,
+  cx: number,
+  cy: number,
+): number {
+  const len = points.length;
+  if (len < 2) return prevAngle;
+  const a1 = Math.atan2(points[len - 2].y - cy, points[len - 2].x - cx);
+  const a2 = Math.atan2(points[len - 1].y - cy, points[len - 1].x - cx);
+  let delta = a2 - a1;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+  return prevAngle + delta;
 }
 
 export function FriendList() {
@@ -109,14 +108,27 @@ export function FriendList() {
     flushSync(() => setAiPopupOpen(true));
   }, []);
 
-  // ── 원 제스처: 방향 판별 후 선택적 preventDefault ──
+  // ── 원 제스처: pending에서는 스크롤 허용, gesture 확정 후에만 차단 ──
   const mainRef = useRef<HTMLElement>(null);
   const gesturePhaseRef = useRef<GesturePhase>("idle");
   const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // 증분 각도 + 중심점 캐시 (매 프레임 전체 재계산 방지)
+  const cumulAngleRef = useRef(0);
+  const centerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const pointCountRef = useRef(0);
+  const centerSumRef = useRef<{ sx: number; sy: number }>({ sx: 0, sy: 0 });
 
   useEffect(() => {
     const el = mainRef.current;
     if (!el) return;
+
+    const resetGesture = () => {
+      circlePointsRef.current = [];
+      gesturePhaseRef.current = "idle";
+      cumulAngleRef.current = 0;
+      pointCountRef.current = 0;
+      centerSumRef.current = { sx: 0, sy: 0 };
+    };
 
     const onTouchStart = (e: TouchEvent) => {
       const { clientX: x, clientY: y } = e.touches[0];
@@ -124,56 +136,79 @@ export function FriendList() {
       circleFiredRef.current = false;
       startPosRef.current = { x, y };
       gesturePhaseRef.current = "pending";
+      cumulAngleRef.current = 0;
+      pointCountRef.current = 1;
+      centerSumRef.current = { sx: x, sy: y };
+      centerRef.current = { x, y };
     };
 
     const onTouchMove = (e: TouchEvent) => {
       const phase = gesturePhaseRef.current;
-      if (phase === "idle" || circleFiredRef.current) return;
-
-      // scroll 판정 이후 → 브라우저 기본 스크롤 허용
-      if (phase === "scroll") return;
+      if (phase === "idle" || phase === "scroll" || circleFiredRef.current) return;
 
       const { clientX: x, clientY: y } = e.touches[0];
-      circlePointsRef.current.push({ x, y });
 
-      // pending 단계: 방향 판별 전까지 스크롤 차단
+      // pending: 포인트만 수집, 스크롤은 허용 (preventDefault 안 함)
       if (phase === "pending") {
-        e.preventDefault();
+        circlePointsRef.current.push({ x, y });
+        // 중심점 증분 업데이트
+        pointCountRef.current++;
+        centerSumRef.current.sx += x;
+        centerSumRef.current.sy += y;
+        centerRef.current = {
+          x: centerSumRef.current.sx / pointCountRef.current,
+          y: centerSumRef.current.sy / pointCountRef.current,
+        };
+
         const dx = Math.abs(x - startPosRef.current.x);
         const dy = Math.abs(y - startPosRef.current.y);
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist >= DIRECTION_DECIDE_DISTANCE) {
           if (dx > 0 && dy / dx >= VERTICAL_RATIO) {
-            // 수직 이동 → 스크롤로 판정, 밀린 스크롤량 적용
+            // 수직 → 스크롤로 판정
             gesturePhaseRef.current = "scroll";
-            const scrollDelta = y - startPosRef.current.y;
-            el.scrollTop -= scrollDelta;
             circlePointsRef.current = [];
             return;
           }
-          // 비수직 → 원 제스처 진행
+          // 비수직 → 제스처 확정, 여기서부터 스크롤 차단
           gesturePhaseRef.current = "gesture";
+          e.preventDefault();
         }
         return;
       }
 
-      // gesture 단계: 스크롤 완전 차단 + 누적 각도 체크
+      // gesture: 스크롤 완전 차단 + 증분 각도 계산
       e.preventDefault();
-      const angle = calcCumulativeAngle(circlePointsRef.current);
-      if (angle >= CIRCLE_ANGLE_THRESHOLD) {
-        circleFiredRef.current = true;
-        circlePointsRef.current = [];
-        gesturePhaseRef.current = "idle";
-        openAIPopup();
+      circlePointsRef.current.push({ x, y });
+      // 중심점 증분 업데이트
+      pointCountRef.current++;
+      centerSumRef.current.sx += x;
+      centerSumRef.current.sy += y;
+      centerRef.current = {
+        x: centerSumRef.current.sx / pointCountRef.current,
+        y: centerSumRef.current.sy / pointCountRef.current,
+      };
+
+      // 증분 각도 (O(1) — 마지막 2포인트만 비교)
+      if (circlePointsRef.current.length >= MIN_POINTS_FOR_ANGLE) {
+        cumulAngleRef.current = calcIncrementalAngle(
+          circlePointsRef.current,
+          cumulAngleRef.current,
+          centerRef.current.x,
+          centerRef.current.y,
+        );
+        if (Math.abs(cumulAngleRef.current) * (180 / Math.PI) >= CIRCLE_ANGLE_THRESHOLD) {
+          circleFiredRef.current = true;
+          resetGesture();
+          openAIPopup();
+        }
       }
     };
 
-    const onTouchEnd = () => {
-      circlePointsRef.current = [];
-      gesturePhaseRef.current = "idle";
-    };
+    const onTouchEnd = () => { resetGesture(); };
 
-    // passive: false → pending/gesture 단계에서 preventDefault 가능
+    // touchstart/touchend: passive (스크롤 성능 유지)
+    // touchmove: non-passive (gesture 확정 후에만 preventDefault 호출)
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: true });
@@ -186,11 +221,20 @@ export function FriendList() {
   }, [openAIPopup]);
 
   // ── 원 제스처: 마우스 (데스크탑) ──
+  const mouseAngleRef = useRef(0);
+  const mouseCenterSumRef = useRef<{ sx: number; sy: number }>({ sx: 0, sy: 0 });
+  const mousePointCountRef = useRef(0);
+  const mouseCenterRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     mouseDownRef.current = true;
     circlePointsRef.current = [{ x: e.clientX, y: e.clientY }];
     circleFiredRef.current = false;
+    mouseAngleRef.current = 0;
+    mousePointCountRef.current = 1;
+    mouseCenterSumRef.current = { sx: e.clientX, sy: e.clientY };
+    mouseCenterRef.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   const handleMouseMove = useCallback(
@@ -198,11 +242,26 @@ export function FriendList() {
       if (!mouseDownRef.current || circleFiredRef.current) return;
       e.preventDefault();
       circlePointsRef.current.push({ x: e.clientX, y: e.clientY });
-      if (calcCumulativeAngle(circlePointsRef.current) >= CIRCLE_ANGLE_THRESHOLD) {
-        circleFiredRef.current = true;
-        circlePointsRef.current = [];
-        mouseDownRef.current = false;
-        openAIPopup();
+      mousePointCountRef.current++;
+      mouseCenterSumRef.current.sx += e.clientX;
+      mouseCenterSumRef.current.sy += e.clientY;
+      mouseCenterRef.current = {
+        x: mouseCenterSumRef.current.sx / mousePointCountRef.current,
+        y: mouseCenterSumRef.current.sy / mousePointCountRef.current,
+      };
+      if (circlePointsRef.current.length >= MIN_POINTS_FOR_ANGLE) {
+        mouseAngleRef.current = calcIncrementalAngle(
+          circlePointsRef.current,
+          mouseAngleRef.current,
+          mouseCenterRef.current.x,
+          mouseCenterRef.current.y,
+        );
+        if (Math.abs(mouseAngleRef.current) * (180 / Math.PI) >= CIRCLE_ANGLE_THRESHOLD) {
+          circleFiredRef.current = true;
+          circlePointsRef.current = [];
+          mouseDownRef.current = false;
+          openAIPopup();
+        }
       }
     },
     [openAIPopup]
@@ -230,7 +289,7 @@ export function FriendList() {
       <main
         ref={mainRef}
         className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide pb-28"
-        style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
+        style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch", willChange: "scroll-position" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
