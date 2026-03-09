@@ -40,14 +40,14 @@ function useBattery() {
   return { level: level ?? 0.85, charging };
 }
 
-export function StatusBar({ darkMode = false }: { darkMode?: boolean }) {
+export function StatusBar({ darkMode = false, bgColor }: { darkMode?: boolean; bgColor?: string }) {
   const time = useCurrentTime();
   const { level } = useBattery();
 
   const batteryFillWidth = Math.max(0, Math.min(17, level * 17));
 
   return (
-    <div className={`flex items-center justify-between px-6 pt-3.5 pb-1 transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}>
+    <div className={`flex items-center justify-between px-6 pt-3.5 pb-1 transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`} style={bgColor ? { backgroundColor: bgColor } : undefined}>
       <span className={`text-[15px] font-semibold tracking-tight transition-colors duration-500 ${darkMode ? "text-white" : "text-gray-900"}`}>{time}</span>
       <div className={`flex items-center gap-1.5 transition-colors duration-500 ${darkMode ? "text-white" : "text-gray-900"}`}>
         {/* Battery — iPhone 스타일 (몸체 + 우측 캡) */}

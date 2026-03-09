@@ -43,7 +43,7 @@ const NAV_ITEMS = [
   { active: false, badge: null, src: "/gnb-tab-5.png" },
 ];
 
-export function BottomNavBar({ darkMode = false }: { darkMode?: boolean }) {
+export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange }: { darkMode?: boolean; activeTab?: number; onTabChange?: (tab: number) => void }) {
   return (
     <nav
       className={[
@@ -64,31 +64,35 @@ export function BottomNavBar({ darkMode = false }: { darkMode?: boolean }) {
       />
 
       <div className="relative flex flex-1 items-center justify-around px-2">
-        {NAV_ITEMS.map((item, i) => (
-          <button
-            key={i}
-            className={`flex items-center justify-center rounded-2xl transition-colors active:bg-black/5 relative ${
-              item.active ? "w-[72px] h-12 -translate-x-1" : "w-12 h-12"
-            }`}
-          >
-            {item.active && (
-              <span className={`absolute inset-0 rounded-[40px] ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.12]"}`} />
-            )}
-
-            <div className="relative z-10 flex items-center justify-center w-[25px] h-[25px]">
-              <img
-                src={item.src}
-                alt=""
-                className={`w-[25px] h-[25px] object-contain ${darkMode ? "invert" : ""}`}
-              />
-              {item.badge && (
-                <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] bg-red-500 text-white text-[9.5px] font-bold rounded-full flex items-center justify-center px-[3px] leading-none shadow-sm">
-                  {item.badge}
-                </span>
+        {NAV_ITEMS.map((item, i) => {
+          const isActive = i === activeTab;
+          return (
+            <button
+              key={i}
+              className={`flex items-center justify-center rounded-2xl transition-colors active:bg-black/5 relative ${
+                isActive ? "w-[72px] h-12 -translate-x-1" : "w-12 h-12"
+              }`}
+              onClick={() => onTabChange?.(i)}
+            >
+              {isActive && (
+                <span className={`absolute inset-0 rounded-[40px] ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.12]"}`} />
               )}
-            </div>
-          </button>
-        ))}
+
+              <div className="relative z-10 flex items-center justify-center w-[25px] h-[25px]">
+                <img
+                  src={item.src}
+                  alt=""
+                  className={`w-[25px] h-[25px] object-contain ${darkMode ? "invert" : ""}`}
+                />
+                {item.badge && !isActive && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] bg-red-500 text-white text-[9.5px] font-bold rounded-full flex items-center justify-center px-[3px] leading-none shadow-sm">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

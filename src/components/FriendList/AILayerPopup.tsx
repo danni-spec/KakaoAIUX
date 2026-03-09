@@ -92,6 +92,7 @@ interface AILayerPopupProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
   darkMode: boolean;
   onDarkModeToggle: (value: boolean) => void;
+  onCreateChatRoom?: (memberNames: string[], initialMessage?: string) => void;
 }
 
 // 음성 명령어 → 액션 매핑
@@ -106,6 +107,7 @@ const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
   { keywords: ["가는 길", "어떻게 가", "길 찾기", "지도", "네비", "경로"], action: "navigation" },
   { keywords: ["전송", "보내", "보내줘"], action: "send" },
   { keywords: ["사원증"], action: "choonsik-card" },
+  { keywords: ["채팅방 만들어", "채팅방 생성", "채팅방 만들기", "톡방 만들어", "단톡방 만들어", "대화방 만들어", "대화방 생성", "대화방 만들기"], action: "create-chatroom" },
 ];
 
 interface NavStep {
@@ -233,9 +235,28 @@ function LoadingMessages({ dark }: { dark?: boolean }) {
   );
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle }: AILayerPopupProps) {
+/** 채팅방 생성 요청에서 멤버 이름 + 초기 메시지 추출 */
+function extractChatRequest(text: string): { members: string[]; message: string } {
+  // 메시지 분리: "... 만들어줘 안녕하세요" → message = "안녕하세요"
+  const msgMatch = text.match(/(?:만들어줘|만들어|생성해줘|생성|만들기)\s+(.+)$/);
+  const message = msgMatch ? msgMatch[1].trim() : "";
+
+  // 멤버 이름 추출
+  const cleaned = text
+    .replace(/채팅방|톡방|단톡방|대화방|만들어줘|만들어|생성해줘|생성|만들기|해줘/g, "")
+    .replace(message, "")
+    .trim();
+  // 구분자: 와, 과, 이랑, 하고, 랑, 쉼표, 공백+
+  const names = cleaned
+    .split(/[,，]\s*|\s+(?:와|과|이랑|하고|랑)\s+|\s+/)
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0);
+  return { members: names, message };
+}
+
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimText, setInterimText] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -258,7 +279,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [navArrived, setNavArrived] = useState(false);
   const [darkmodeView, setDarkmodeView] = useState(false);
   const [choonsikCardView, setChoonsikCardView] = useState(false);
-  const [choonsikFullscreen, setChoonsikFullscreen] = useState(false);
+  const [, setChoonsikFullscreen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -506,11 +527,25 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setTextSending(true);
       loadingTimerRef.current = setTimeout(() => {
         setTextSending(false);
+        setTextMode(false);
         doStop();
         setSummaryResult(null);
-        setChatMessages([]);
         setChoonsikCardView(true);
-        setChoonsikFullscreen(true);
+        // choonsikFullscreen 제거됨
+        textSendLockRef.current = false;
+      }, 1500);
+    } else if (action === "create-chatroom") {
+      const { members, message } = extractChatRequest(text);
+      inputRef.current?.blur();
+      setTextSending(true);
+      loadingTimerRef.current = setTimeout(() => {
+        setTextSending(false);
+        setTextMode(false);
+        doStop();
+        if (members.length > 0 && onCreateChatRoom) {
+          onCreateChatRoom(members, message || undefined);
+          onClose();
+        }
         textSendLockRef.current = false;
       }, 1500);
     } else {
@@ -608,9 +643,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           setTranscript("");
           setInterimText("");
           setStatusMessage(null);
-          setChatMessages([]);
           setChoonsikCardView(true);
-          setChoonsikFullscreen(true);
+          // choonsikFullscreen 제거됨
+        } else if (action === "create-chatroom") {
+          const { members, message } = extractChatRequest(text);
+          doStop();
+          setTranscript("");
+          setInterimText("");
+          setStatusMessage(null);
+          if (members.length > 0 && onCreateChatRoom) {
+            onCreateChatRoom(members, message || undefined);
+            onClose();
+          }
         } else {
           // 미처리 액션 → 보이스 리스닝 복귀
           setStatusMessage(null);
@@ -856,7 +900,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-40"
+      className="absolute inset-0 z-[60]"
       style={{ pointerEvents: isOpen ? "auto" : "none" }}
     >
       {/* ── 배경 (딤 없음, 닫기 영역) ── */}
@@ -904,24 +948,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       <>
-      {/* ── AI 레이어 카드 (bottom 고정, 위로 확장) ── */}
+      {/* ── AI 레이어 카드 (상하 여백 60px) ── */}
       <div
-        className="absolute left-4 right-4 flex flex-col justify-end"
+        className="absolute left-4 right-4 transition-all duration-300"
         style={{
-          top: (navActive || navArrived) ? 100 : choonsikFullscreen ? 54 : "auto",
-          bottom: isOpen ? 16 : -300,
+          top: (navActive || navArrived) ? 100 : undefined,
+          bottom: isOpen ? 96 : -300,
           opacity: isOpen && !minimized ? 1 : 0,
           transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
           pointerEvents: minimized ? "none" : "auto",
-          transition: "top 0.6s cubic-bezier(0.32, 0.72, 0, 1), bottom 0.6s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease, transform 0.5s cubic-bezier(0.32, 0.72, 0, 1)",
         }}
       >
-        <div className="relative" style={{ height: (navActive || navArrived || choonsikFullscreen) ? "100%" : "auto", transition: "height 0.6s cubic-bezier(0.32, 0.72, 0, 1)" }}>
+        <div className={`relative ${navActive || navArrived ? "h-full" : ""}`}>
           {/* ── 외곽 글로우: 블러된 회전 그라디언트 ── */}
           <div
             className="absolute inset-[-8px] rounded-[32px] overflow-hidden -z-10 pointer-events-none animate-glow-breathe"
-            style={{}}
           >
             <div
               className="absolute inset-[-100%] animate-gradient-spin"
@@ -934,8 +976,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
           {/* ── 카드 본체 ── */}
           <div
-            className="relative rounded-[30px] overflow-hidden backdrop-blur-[4px] flex flex-col"
-            style={{ height: (navActive || navArrived || choonsikFullscreen) ? "100%" : "auto", backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)", transition: "height 0.6s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.5s ease, box-shadow 0.5s ease" }}
+            className={`relative rounded-[30px] overflow-hidden transition-[background-color,box-shadow] duration-500 backdrop-blur-[4px] ${navActive || navArrived ? "h-full" : ""}`}
+            style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)" }}
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
@@ -978,6 +1020,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 </div>
               )}
+              {/* ── 춘식이 사원증 카드 (normal flow, 레이어 높이 유연 확장) ── */}
+              {choonsikCardView && !textMode && (
+                <div className="flex items-center justify-center w-full pointer-events-auto px-4" style={{ paddingTop: 56, paddingBottom: 48 }}>
+                  <img
+                    src="/card-choonsik.png"
+                    alt="춘식이"
+                    style={{
+                      width: 220,
+                      height: 304,
+                      objectFit: "cover",
+                      borderRadius: 16,
+                    }}
+                  />
+                </div>
+              )}
+
               {/* 빈영역 센터: 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
               <div
                 className="absolute inset-x-0 top-0 bottom-[72px] flex flex-col items-center justify-center gap-3 pointer-events-none"
@@ -1040,7 +1098,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     />
                   </div>
                 )}
-                {!summaryResult && !choonsikCardView && (listening || isLoading || statusMessage || transcript || interimText) && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
+                {!summaryResult && !choonsikCardView && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
                   style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#1C1C1E") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#a1a1aa" : "#374151") }}
                 >
                   {isLoading
@@ -1529,33 +1587,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 </div>
               )}
 
-              {/* ── 춘식이 사원증 카드 (입력창 위, 아래에서 위로 확장) ── */}
-              {choonsikCardView && (
-                <div
-                  className="flex-1 flex items-center justify-center w-full overflow-hidden min-h-0"
-                  style={{
-                    opacity: choonsikFullscreen ? 1 : 0,
-                    transform: choonsikFullscreen ? "translateY(0) scale(1)" : "translateY(60px) scale(0.88)",
-                    transition: "opacity 0.8s cubic-bezier(0.32, 0.72, 0, 1), transform 0.8s cubic-bezier(0.32, 0.72, 0, 1)",
-                    padding: "12px 0",
-                  }}
-                >
-                  <img
-                    src="/card-choonsik.png"
-                    alt="춘식이"
-                    style={{
-                      width: 220,
-                      height: 304,
-                      objectFit: "cover",
-                      borderRadius: 16,
-                      border: "none",
-                      outline: "none",
-                      boxShadow: "none",
-                    }}
-                  />
-                </div>
-              )}
-
               <div
                 className="px-4 pb-4 transition-all duration-[400ms]"
                 style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
@@ -1572,10 +1603,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   }}
                   onClick={() => {
                     if (!textSending && !sendStatus) {
-                      if (choonsikCardView) {
-                        setChoonsikFullscreen(false);
-                        setTimeout(() => setChoonsikCardView(false), 600);
-                      }
                       setTextMode(true);
                       inputRef.current?.focus({ preventScroll: true });
                     }
@@ -1682,6 +1709,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       </>
+
+      {/* 사원증 풀스크린 오버레이 제거됨 — 카드 본체 안에서 표시 */}
 
     </div>
   );

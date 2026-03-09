@@ -13,6 +13,9 @@ import { DarkModeOverlay } from "./DarkModeOverlay";
 import { MapLayerOverlay } from "./MapLayerOverlay";
 import { NotificationBanner } from "./NotificationBanner";
 import { BirthdayGiftPopup } from "./BirthdayGiftPopup";
+import { ChatRoomList } from "./ChatRoomList";
+import { ChatRoomDetail } from "./ChatRoomDetail";
+import { useChatRooms } from "../../contexts/ChatRoomContext";
 
 /**
  * Squircle clipPath — 첨부 이미지와 동일한 형태 (코너 강하게 둥글게)
@@ -74,6 +77,9 @@ function calcIncrementalAngle(
 }
 
 export function FriendList() {
+  const [gnbTab, setGnbTab] = useState(0); // 0: 친구, 1: 채팅, 2~4: 기타
+  const chatRoomActions = useChatRooms();
+  const { activeChatRoomId } = chatRoomActions;
   const [aiPopupOpen, setAiPopupOpen] = useState(false);
   const [darkModeOverlayOpen, setDarkModeOverlayOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
@@ -284,37 +290,58 @@ export function FriendList() {
     >
       <SquircleClipDef />
       <StatusBar darkMode={darkMode} />
-      {/* pb-28: 플로팅 GNB 높이(≈60px) + bottom-3(12px) + 여유분 — 탑바·칩 포함 스크롤 */}
-      {/* 원 제스처: 화면에 원을 그리면 AI 레이어 박스 노출 */}
-      <main
-        ref={mainRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide pb-28"
+      {/* 원 제스처: 모든 탭에서 원을 그리면 AI 레이어 박스 노출 */}
+      <div
+        ref={mainRef as React.RefObject<HTMLDivElement>}
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
         style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch", willChange: "scroll-position" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
       >
-        <Header darkMode={darkMode} />
-        <div>
-          <TabNavigation darkMode={darkMode} />
-        </div>
-        <UpdatedFriendsSection darkMode={darkMode} onFriendClick={handleFriendClick} />
-        <BirthdayFriendsSection darkMode={darkMode} />
-        <FavoriteFriendsSection darkMode={darkMode} />
-        <AllFriendsSection darkMode={darkMode} />
-      </main>
+        {/* ── 탭 0: 친구 목록 ── */}
+        {gnbTab === 0 && (
+          <div className="pb-28">
+            <Header darkMode={darkMode} />
+            <div>
+              <TabNavigation darkMode={darkMode} />
+            </div>
+            <UpdatedFriendsSection darkMode={darkMode} onFriendClick={handleFriendClick} />
+            <BirthdayFriendsSection darkMode={darkMode} />
+            <FavoriteFriendsSection darkMode={darkMode} />
+            <AllFriendsSection darkMode={darkMode} />
+          </div>
+        )}
+        {/* ── 탭 1: 채팅 목록 ── */}
+        {gnbTab === 1 && <ChatRoomList darkMode={darkMode} />}
+      </div>
+      {/* ── 채팅방 상세 (어떤 탭이든 활성 채팅방이 있으면 오버레이) ── */}
+      {activeChatRoomId && <ChatRoomDetail darkMode={darkMode} onOpenAI={openAIPopup} />}
       <NotificationBanner
         isOpen={notificationOpen}
         onClose={() => setNotificationOpen(false)}
       />
       {/* absolute 오버레이 → backdrop-blur 실효 */}
-      <BottomNavBar darkMode={darkMode} />
+      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} />
       <AILayerPopup
         isOpen={aiPopupOpen}
         onClose={() => setAiPopupOpen(false)}
         inputRef={aiInputRef}
         darkMode={darkMode}
         onDarkModeToggle={setDarkMode}
+        onCreateChatRoom={(members, initialMessage) => {
+          const { openDirectChat, createGroupChat, sendMessage } = chatRoomActions;
+          let room;
+          if (members.length === 1) {
+            room = openDirectChat(members[0]);
+          } else {
+            room = createGroupChat(members);
+          }
+          if (room && initialMessage) {
+            sendMessage(room.id, initialMessage);
+          }
+          setGnbTab(1);
+        }}
       />
       <DarkModeOverlay
         isOpen={darkModeOverlayOpen}

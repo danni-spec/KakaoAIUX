@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { FriendList } from "./components/FriendList";
+import { ChatRoomProvider } from "./contexts/ChatRoomContext";
 
 /** 풀스크린 모바일 웹 레이아웃 */
 function App() {
   const [showWalkthrough, setShowWalkthrough] = useState(true);
 
   return (
+    <ChatRoomProvider>
     <div className="w-full overflow-hidden" style={{ height: "100dvh" }}>
       <FriendList />
       {showWalkthrough && (
@@ -23,6 +25,7 @@ function App() {
         </div>
       )}
     </div>
+    </ChatRoomProvider>
   );
 }
 
