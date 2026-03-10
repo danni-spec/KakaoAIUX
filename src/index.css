@@ -1,57 +1,10 @@
 @import "tailwindcss";
 
-/* 모든 요소 box-sizing 리셋 */
+/* ═══════════════════════════════════════════════════════════════════════════
+   [1] 글로벌 리셋 — box-sizing, 선택 방지, 줌 방지
+   ═══════════════════════════════════════════════════════════════════════════ */
 *, *::before, *::after {
   box-sizing: border-box;
-}
-
-/* 모바일 시연: 전체 화면 고정, 스크롤은 앱 내부만 */
-html, body, #root {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  max-width: 100%;
-  height: 100%;
-  overflow: hidden;
-  overflow-x: hidden !important;
-  overscroll-behavior: none;
-  position: relative;
-}
-
-/* iOS Safari: 100vh/dvh 버그 대응 */
-@supports (-webkit-touch-callout: none) {
-  html, body, #root {
-    height: -webkit-fill-available;
-  }
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-}
-
-/* iOS Safari 자동 줌 방지: input/textarea/select는 16px 이상 필수 */
-input, textarea, select {
-  font-size: 16px !important;
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-/* 터치 줌 방지 */
-html {
-  touch-action: manipulation;
-}
-
-img, svg {
-  -webkit-user-drag: none;
-}
-
-*, *::before, *::after {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -59,6 +12,79 @@ img, svg {
 
 ::selection {
   background: transparent;
+}
+
+input, textarea, select {
+  /* iOS Safari 자동 줌 방지: 16px 이상 필수 */
+  font-size: 16px !important;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [2] 뷰포트 잠금 (Viewport Locking)
+   ───────────────────────────────────────────────────────────────────────────
+   핵심: html, body에 position: fixed를 적용하면 브라우저의
+   "키보드가 올라올 때 페이지를 위로 밀어올리는 기본 동작"이 원천 차단됨.
+   fixed 요소는 브라우저의 scroll 대상에서 제외되기 때문.
+
+   - width/height: 100% (vw 아님 — vw는 스크롤바 폭 포함하여 overflow 유발)
+   - overflow: hidden (양방향)
+   - overscroll-behavior: none (pull-to-refresh/bounce 차단)
+   ═══════════════════════════════════════════════════════════════════════════ */
+html {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-touch-callout: none;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [3] iOS Safari -webkit-fill-available 폴백
+   ───────────────────────────────────────────────────────────────────────────
+   position: fixed + 100%는 대부분의 경우 충분하지만,
+   iOS Safari에서 주소창이 숨겨질 때의 미세한 높이 차이를 보정.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@supports (-webkit-touch-callout: none) {
+  html, body, #root {
+    height: -webkit-fill-available;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [4] 기타 유틸리티
+   ═══════════════════════════════════════════════════════════════════════════ */
+img, svg {
+  -webkit-user-drag: none;
 }
 
 @layer utilities {
@@ -70,6 +96,10 @@ img, svg {
     display: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [5] 애니메이션 키프레임 (기능 변경 없음)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── AI 카드 그라디언트 회전 + 일렁임 ── */
 @keyframes gradient-spin {

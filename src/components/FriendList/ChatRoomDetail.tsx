@@ -30,50 +30,61 @@ function calcIncrementalAngle(
   return prevAngle + delta;
 }
 
+/**
+ * ChatRoomDetail — 채팅방 상세 뷰
+ *
+ * ┌─ 레이아웃 전략 ──────────────────────────────────────────────────────────┐
+ * │  position: absolute + inset: 0  (부모 App 컨테이너 기준)                 │
+ * │  → fixed 아님. 부모가 이미 VisualViewport 높이로 조절되므로              │
+ * │    이 컨테이너는 부모를 100% 채우면 됨.                                  │
+ * │                                                                          │
+ * │  키보드 감지:                                                             │
+ * │  → visualViewport.height로 키보드 유무를 판단                            │
+ * │  → 컨테이너 높이를 vv.height로 직접 설정 (부모와 독립적 보정)            │
+ * │  → Home Indicator bar는 키보드 open 시 숨김                              │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
 export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOpenAI?: () => void }) {
   const { activeChatRoom, closeChatRoom, sendMessage } = useChatRooms();
   const [text, setText] = useState("");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [containerHeight, setContainerHeight] = useState<string>("100%");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef(0);
 
-  // VisualViewport 대응: 키보드가 올라오면 컨테이너 높이를 실시간 조절
-  // body 스타일은 건드리지 않고 컨테이너만 제어
+  // ── VisualViewport 대응 ──
+  // html/body가 position:fixed로 잠겨 있으므로 브라우저 scroll은 발생하지 않음.
+  // 여기서는 오직 높이 추적 + 키보드 감지만 담당.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const onViewportChange = () => {
-      setViewportHeight(vv.height);
-      setKeyboardOpen(vv.height < window.innerHeight * 0.75);
+    const update = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const h = vv.height;
+        setContainerHeight(`${h}px`);
+        setKeyboardOpen(h < window.innerHeight * 0.75);
 
-      // 브라우저가 화면을 밀어올리는 것을 강제 차단
-      window.scrollTo(0, 0);
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-
-      if (containerRef.current) {
-        containerRef.current.style.height = `${vv.height}px`;
-      }
-
-      requestAnimationFrame(() => {
+        // 키보드가 올라온 상태에서 메시지 영역을 최하단으로 스크롤
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
       });
     };
 
-    vv.addEventListener("resize", onViewportChange);
-    vv.addEventListener("scroll", onViewportChange);
-    onViewportChange();
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
 
     return () => {
-      vv.removeEventListener("resize", onViewportChange);
-      vv.removeEventListener("scroll", onViewportChange);
+      cancelAnimationFrame(rafRef.current);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
     };
   }, []);
 
-  // 원 제스처 (마우스)
+  // ── 원 제스처 (마우스) ──
   const circlePointsRef = useRef<{ x: number; y: number }[]>([]);
   const circleFiredRef = useRef(false);
   const mouseDownRef = useRef(false);
@@ -125,7 +136,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
     circlePointsRef.current = [];
   }, []);
 
-  // 원 제스처 (터치)
+  // ── 원 제스처 (터치) ──
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -208,7 +219,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
     };
   }, [onOpenAI]);
 
-  // 메시지 추가 시 자동 스크롤
+  // ── 메시지 추가 시 자동 스크롤 ──
   useEffect(() => {
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -231,11 +242,9 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
       className={`absolute inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
         width: "100%",
-        maxWidth: "100%",
-        height: viewportHeight ? `${viewportHeight}px` : "100%",
+        height: containerHeight,
         paddingTop: "env(safe-area-inset-top)",
         overflow: "hidden",
-        overflowX: "hidden",
       }}
     >
       <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
