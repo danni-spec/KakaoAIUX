@@ -918,7 +918,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     <div
       ref={containerRef}
       className="absolute inset-0 z-[60]"
-      style={{ pointerEvents: isOpen ? "auto" : "none" }}
+      style={{ pointerEvents: isOpen && !minimized ? "auto" : "none" }}
     >
       {/* ── 배경 (딤 없음, 닫기 영역) ── */}
       <div
@@ -943,8 +943,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <div
         className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer select-none touch-none ${isDragging || dismissing ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
         style={floatPos
-          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none" }
-          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none" }
+          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none", pointerEvents: minimized ? "auto" : "none" }
+          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none", pointerEvents: minimized ? "auto" : "none" }
         }
         onClick={() => { if (wasDraggedRef.current) { wasDraggedRef.current = false; return; } if (!showDismiss && !draggingRef.current) { setMinimized(false); setFloatPos(null); } }}
         onTouchStart={handleFloatTouchStart}
@@ -967,7 +967,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <>
       {/* ── AI 레이어 카드 (상하 여백 60px) ── */}
       <div
-        className="absolute left-4 right-4 overflow-hidden transition-all duration-300"
+        className="absolute left-4 right-4 overflow-visible transition-all duration-300"
         style={{
           top: (navActive || navArrived) ? 100 : undefined,
           bottom: isOpen ? (fromChatRoom ? 96 : 16) : -300,
@@ -980,7 +980,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         <div className={`relative ${navActive || navArrived ? "h-full" : ""}`}>
           {/* ── 외곽 글로우: 블러된 회전 그라디언트 ── */}
           <div
-            className="absolute inset-[-8px] rounded-[32px] overflow-hidden -z-10 pointer-events-none animate-glow-breathe"
+            className="absolute inset-[-2px] rounded-[28px] overflow-hidden -z-10 pointer-events-none animate-glow-breathe"
           >
             <div
               className="absolute inset-[-100%] animate-gradient-spin"
@@ -1000,7 +1000,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           >
               {/* ── 우상단 내리기 버튼 (텍스트 모드에서는 숨김) ── */}
               {!textMode && (
-                <div className="absolute z-10 flex items-center gap-2" style={{ top: 16, right: 16 }}>
+                <div className="absolute z-30 flex items-center gap-2" style={{ top: 16, right: 16 }}>
                   <button
                     type="button"
                     className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
@@ -1615,7 +1615,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       <button
                         key={text}
                         type="button"
-                        className={`flex-shrink-0 px-[14px] h-[40px] rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${darkMode ? "bg-white/[0.12] text-gray-200" : "bg-black/[0.06] text-gray-700"}`}
+                        className={`flex-shrink-0 px-[14px] h-[40px] rounded-full text-[13px] font-medium whitespace-nowrap transition-colors backdrop-blur-[16px] backdrop-saturate-[1.6] ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                        style={darkMode ? {
+                          background: "linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(200,180,255,0.13) 50%, rgba(255,255,255,0.10) 100%)",
+                          boxShadow: "inset 0 0 0 0.5px rgba(255,255,255,0.40)",
+                        } : {
+                          background: "linear-gradient(135deg, rgba(255,245,200,0.25) 0%, rgba(255,255,255,0.30) 20%, rgba(220,200,255,0.30) 45%, rgba(200,235,210,0.18) 72%, rgba(255,255,255,0.40) 100%)",
+                          boxShadow: "0 1px 6px rgba(0,0,0,0.06), inset 0 0 0 0.5px rgba(255,255,255,1.0), inset 0 1px 0 rgba(255,255,255,1.0)",
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           updateInputText(text);
@@ -1629,13 +1636,13 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 )}
                 <div
-                  className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
+                  className={`flex items-center gap-2 pl-4 pr-2 h-[52px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
                   style={{
                     ...(darkMode ? {
                       boxShadow: "inset 0 0 0 0.5px rgba(255,255,255,0.08)",
                     } : {
-                      background: "linear-gradient(135deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.60) 100%)",
-                      boxShadow: "0 2px 16px rgba(0,0,0,0.06), 0 0 0 0.5px rgba(255,255,255,0.8), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -0.5px 0 rgba(0,0,0,0.04)",
+                      background: "linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.50) 100%)",
+                      boxShadow: "0 2px 16px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.04)",
                     }),
                   }}
                   onClick={() => {
@@ -1687,7 +1694,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   {(textMode || replyMode) && inputText.trim() ? (
                     <button
                       type="button"
-                      className="w-9 h-9 rounded-full flex-shrink-0 mr-[-4px] flex items-center justify-center bg-black"
+                      className="w-11 h-11 rounded-full flex-shrink-0 mr-[-4px] flex items-center justify-center bg-black"
                       aria-label="보내기"
                       disabled={textSending || !!sendStatus}
                       onClick={(e) => {
@@ -1696,14 +1703,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         handleTextSend();
                       }}
                     >
-                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                       </svg>
                     </button>
                   ) : (
                     <button
                       type="button"
-                      className="w-9 h-9 rounded-full flex-shrink-0 mr-[-4px] flex items-center justify-center"
+                      className="w-11 h-11 rounded-full flex-shrink-0 mr-[-4px] flex items-center justify-center"
                       style={{ background: "linear-gradient(135deg, #FF538A, #E91E8A)" }}
                       aria-label={textMode ? "음성 입력" : "텍스트 입력"}
                       disabled={textSending || !!sendStatus}
