@@ -15,7 +15,7 @@ export function FavoriteFriendsSection({ darkMode = false }: { darkMode?: boolea
         {FAVORITE_FRIENDS.map((friend) => (
           <div
             key={friend.name}
-            className={`flex items-center gap-3 px-5 py-2 transition-colors cursor-pointer ${darkMode ? "hover:bg-white/5 active:bg-white/10" : "hover:bg-gray-50 active:bg-gray-100"}`}
+            className={`flex items-center gap-3 px-4 py-2 transition-colors cursor-pointer ${darkMode ? "hover:bg-white/5 active:bg-white/10" : "hover:bg-gray-50 active:bg-gray-100"}`}
           >
             <SquircleAvatar
               src={friend.photo}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
 
 // ── 채팅 메시지 타입 ──
@@ -1066,7 +1067,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                       >
                         {msg.role === "user" ? (
-                          <div className="max-w-[75%] rounded-[18px] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
+                          <div className="max-w-[75%] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]" style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
                             {msg.text}
                           </div>
                         ) : (
@@ -1570,7 +1571,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       {msg.role === "user" ? (
-                        <div className="max-w-[75%] rounded-[18px] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]">
+                        <div className="max-w-[75%] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]" style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
                           {msg.text}
                         </div>
                       ) : (

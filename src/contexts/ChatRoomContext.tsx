@@ -107,10 +107,16 @@ const INITIAL_ROOMS: ChatRoom[] = [
       { name: "유진", photo: "/profile-yerin.png" },
       { name: "나연", photo: "/profile-chaewon.png" },
     ],
-    lastMessage: "다음 모임 일정",
+    lastMessage: "다음 모임 일정 잡자!",
     lastTimestamp: Date.now() - 1000 * 60 * 60 * 2,
     unreadCount: 2,
-    messages: [],
+    messages: [
+      { id: "m10", sender: "혜선", text: "다음 주에 다 같이 만날까?", timestamp: Date.now() - 1000 * 60 * 60 * 3 },
+      { id: "m11", sender: "유진", text: "좋아! 토요일 어때?", timestamp: Date.now() - 1000 * 60 * 60 * 2.5 },
+      { id: "m12", sender: "나연", text: "나도 토요일 괜찮아~", timestamp: Date.now() - 1000 * 60 * 60 * 2.2 },
+      { id: "m13", sender: "me", text: "저도요! 장소는 어디로?", timestamp: Date.now() - 1000 * 60 * 60 * 2.1 },
+      { id: "m14", sender: "혜선", text: "다음 모임 일정 잡자!", timestamp: Date.now() - 1000 * 60 * 60 * 2 },
+    ],
   },
   {
     id: "room-init-6",
@@ -121,16 +127,24 @@ const INITIAL_ROOMS: ChatRoom[] = [
       { name: "박채원", photo: "/profile-chaewon.png" },
       { name: "서은재", photo: "/profile-emma.png" },
     ],
-    lastMessage: "회식 장소 투표해요",
+    lastMessage: "고마워 바로 송금 할게!",
     lastTimestamp: Date.now() - 1000 * 60 * 60,
     unreadCount: 1,
-    messages: [],
+    messages: [
+      { id: "m15", sender: "김민수", text: "어제 회식 비용 정산할게요", timestamp: Date.now() - 1000 * 60 * 90 },
+      { id: "m16", sender: "강지훈", text: "1인당 25,000원이에요", timestamp: Date.now() - 1000 * 60 * 85 },
+      { id: "m17", sender: "박채원", text: "넵 확인했어요!", timestamp: Date.now() - 1000 * 60 * 80 },
+      { id: "m18", sender: "me", text: "고마워 바로 송금 할게!", timestamp: Date.now() - 1000 * 60 * 75 },
+      { id: "m19", sender: "서은재", text: "저도 보냈어요~", timestamp: Date.now() - 1000 * 60 * 60 },
+    ],
   },
 ];
 
 export function ChatRoomProvider({ children }: { children: ReactNode }) {
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>(INITIAL_ROOMS);
   const [activeChatRoomId, setActiveChatRoomId] = useState<string | null>(null);
+  // 첫 메시지 전송 전까지 리스트에 표시되지 않는 대기 방
+  const [pendingRoom, setPendingRoom] = useState<ChatRoom | null>(null);
 
   const openDirectChat = useCallback(
     (friendName: string): ChatRoom | null => {
@@ -147,7 +161,7 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
         return existing;
       }
 
-      // 새 방 생성
+      // 새 방 생성 (pending — 리스트에 아직 추가하지 않음)
       const newRoom: ChatRoom = {
         id: genId(),
         name: friend.name,
@@ -157,7 +171,7 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
         unreadCount: 0,
         messages: [],
       };
-      setChatRooms((prev) => [newRoom, ...prev]);
+      setPendingRoom(newRoom);
       setActiveChatRoomId(newRoom.id);
       return newRoom;
     },
@@ -181,6 +195,7 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
         return existing;
       }
 
+      // 새 방 생성 (pending — 리스트에 아직 추가하지 않음)
       const newRoom: ChatRoom = {
         id: genId(),
         name: members.map((m) => m.name).join(", "),
@@ -190,7 +205,7 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
         unreadCount: 0,
         messages: [],
       };
-      setChatRooms((prev) => [newRoom, ...prev]);
+      setPendingRoom(newRoom);
       setActiveChatRoomId(newRoom.id);
       return newRoom;
     },
@@ -206,8 +221,15 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closeChatRoom = useCallback(() => {
+    // pending 방에서 메시지 없이 나가면 폐기
+    setPendingRoom((prev) => {
+      if (prev && prev.id === activeChatRoomId && prev.messages.length === 0) {
+        return null;
+      }
+      return prev;
+    });
     setActiveChatRoomId(null);
-  }, []);
+  }, [activeChatRoomId]);
 
   const sendMessage = useCallback((roomId: string, text: string) => {
     const msg: ChatRoomMessage = {
@@ -216,6 +238,23 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
       text,
       timestamp: Date.now(),
     };
+
+    // pending 방이면 첫 메시지와 함께 리스트에 추가
+    setPendingRoom((prev) => {
+      if (prev && prev.id === roomId) {
+        const promoted = {
+          ...prev,
+          messages: [msg],
+          lastMessage: text,
+          lastTimestamp: Date.now(),
+        };
+        setChatRooms((rooms) => [promoted, ...rooms]);
+        return null;
+      }
+      return prev;
+    });
+
+    // 이미 리스트에 있는 방이면 기존 로직
     setChatRooms((prev) =>
       prev.map((r) =>
         r.id === roomId
@@ -255,7 +294,10 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
     }, 1000 + Math.random() * 1500);
   }, []);
 
-  const activeChatRoom = chatRooms.find((r) => r.id === activeChatRoomId) ?? null;
+  // activeChatRoom: 리스트 또는 pending 방에서 찾기
+  const activeChatRoom =
+    chatRooms.find((r) => r.id === activeChatRoomId)
+    ?? (pendingRoom && pendingRoom.id === activeChatRoomId ? pendingRoom : null);
 
   return (
     <ChatRoomContext.Provider

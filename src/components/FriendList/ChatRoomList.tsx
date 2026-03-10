@@ -67,7 +67,7 @@ export function ChatRoomList({ darkMode }: { darkMode: boolean }) {
           <button
             key={room.id}
             type="button"
-            className={`w-full flex items-center gap-3 px-5 py-[10px] text-left transition-colors active:bg-black/5 ${darkMode ? "active:bg-white/5" : ""}`}
+            className={`w-full flex items-center gap-3 px-4 py-[10px] text-left transition-colors active:bg-black/5 ${darkMode ? "active:bg-white/5" : ""}`}
             onClick={() => openChatRoom(room.id)}
           >
             {/* 아바타: 친구탭과 동일하게 SquircleAvatar(mask-image) 적용 */}
@@ -123,28 +123,17 @@ export function ChatRoomList({ darkMode }: { darkMode: boolean }) {
                   </>
                 )}
                 {room.members.length >= 4 && (
-                  <>
-                    <SquircleAvatar
-                      src={room.members[0].photo}
-                      alt={room.members[0].name}
-                      className="absolute top-[1px] left-[1px] w-[23px] h-[23px]"
-                    />
-                    <SquircleAvatar
-                      src={room.members[1].photo}
-                      alt={room.members[1].name}
-                      className="absolute top-[1px] right-[1px] w-[23px] h-[23px]"
-                    />
-                    <SquircleAvatar
-                      src={room.members[2].photo}
-                      alt={room.members[2].name}
-                      className="absolute bottom-[1px] left-[1px] w-[23px] h-[23px]"
-                    />
-                    <SquircleAvatar
-                      src={room.members[3].photo}
-                      alt={room.members[3].name}
-                      className="absolute bottom-[1px] right-[1px] w-[23px] h-[23px]"
-                    />
-                  </>
+                  <div className="grid grid-cols-2 gap-[2px] place-items-center w-full h-full">
+                    {room.members.slice(0, 4).map((member) => (
+                      <SquircleAvatar
+                        key={member.name}
+                        src={member.photo}
+                        alt={member.name}
+                        className="w-[23px] h-[23px]"
+                        noOutline
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
             )}

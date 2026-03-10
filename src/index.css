@@ -238,6 +238,17 @@ img, svg {
   animation: phase-fade-in 0.3s ease-out forwards;
 }
 
+/* ── 카나나 Y축 회전 (1.5초 1바퀴 천천히 + 5초 정지 = 6.5초 주기) ── */
+@keyframes flip-y {
+  0%    { transform: rotateY(0deg); }
+  23.1% { transform: rotateY(360deg); }
+  100%  { transform: rotateY(360deg); }
+}
+
+.animate-flip-y {
+  animation: flip-y 6.5s ease-in-out infinite;
+}
+
 /* ── AI 타이핑 인디케이터 점 애니메이션 ── */
 @keyframes typing-dot {
   0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }

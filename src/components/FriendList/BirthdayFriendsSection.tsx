@@ -29,7 +29,7 @@ export function BirthdayFriendsSection({ darkMode = false }: BirthdayFriendsSect
         {BIRTHDAY_FRIENDS.map((friend) => (
           <div
             key={friend.name}
-            className={`flex items-center gap-3 px-5 py-2 cursor-pointer ${darkMode ? "active:bg-white/10" : "active:bg-gray-50"}`}
+            className={`flex items-center gap-3 px-4 py-2 cursor-pointer ${darkMode ? "active:bg-white/10" : "active:bg-gray-50"}`}
           >
             <SquircleAvatar
               src={friend.photo}
@@ -60,7 +60,7 @@ export function BirthdayFriendsSection({ darkMode = false }: BirthdayFriendsSect
         ))}
 
         {/* 더보기 카드 — 🐱 플레이스홀더도 스퀘어클 */}
-        <div className={`flex items-center gap-3 px-5 py-2 cursor-pointer transition-colors ${darkMode ? "hover:bg-white/5 active:bg-white/10" : "hover:bg-gray-50 active:bg-gray-100"}`}>
+        <div className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${darkMode ? "hover:bg-white/5 active:bg-white/10" : "hover:bg-gray-50 active:bg-gray-100"}`}>
           <img
             src="/giftSquircle.png"
             alt="생일 선물"

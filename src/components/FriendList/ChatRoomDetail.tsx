@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChatRooms } from "../../contexts/ChatRoomContext";
+import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
 import { StatusBar } from "./StatusBar";
 
@@ -32,6 +33,7 @@ function calcIncrementalAngle(
 export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOpenAI?: () => void }) {
   const { activeChatRoom, closeChatRoom, sendMessage } = useChatRooms();
   const [text, setText] = useState("");
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -232,11 +234,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
         onMouseUp={handleMouseUp}
       >
         {activeChatRoom.messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <p className={`text-[14px] ${darkMode ? "text-gray-500" : "text-gray-600"}`}>
-              대화를 시작해 보세요
-            </p>
-          </div>
+          <div className="h-full" />
         )}
         {activeChatRoom.messages.map((msg, i) => {
           const isMe = msg.sender === "me";
@@ -256,23 +254,24 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
               )}
               <div className={`max-w-[65%] ${isMe ? "items-end" : "items-start"}`}>
                 {showAvatar && !isMe && (
-                  <p className={`text-[12px] mb-1 ${darkMode ? "text-gray-300" : "text-[#555]"}`}>
+                  <p className={`text-[12px] mb-1 ${darkMode ? "text-gray-300" : "text-[#000000]"}`}>
                     {msg.sender}
                   </p>
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`rounded-[16px] px-3 py-2 text-[15px] leading-relaxed ${
+                    className={`px-3 min-h-[36px] flex items-center text-[15px] leading-relaxed ${
                       isMe
                         ? "bg-[#FEE500] text-[#191919]"
                         : darkMode
                           ? "bg-[#3a3a3c] text-white"
                           : "bg-white text-[#191919]"
                     }`}
+                    style={{ borderRadius: CHAT_BUBBLE_RADIUS }}
                   >
                     {msg.text}
                   </div>
-                  <span className={`text-[10px] flex-shrink-0 ${darkMode ? "text-gray-500" : "text-gray-500"}`}>
+                  <span className={`text-[10px] flex-shrink-0 ${darkMode ? "text-gray-500" : "text-black/60"}`}>
                     {formatMessageTime(msg.timestamp)}
                   </span>
                 </div>
@@ -299,9 +298,11 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 handleSend();
               }
             }}
+            onFocus={() => setKeyboardOpen(true)}
+            onBlur={() => setKeyboardOpen(false)}
             placeholder="메시지 입력"
-            className={`flex-1 text-[14px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
-            style={{ fontSize: "14px" }}
+            className={`flex-1 text-[15px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
+            style={{ fontSize: "15px" }}
           />
           <button type="button" className="flex-shrink-0 ml-[4px]">
             <img src="/emojiIcon.svg" alt="이모티콘" className={`w-[23px] h-[23px] ${darkMode ? "invert" : ""}`} />
@@ -325,10 +326,11 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
           )}
         </div>
       </div>
-      {/* 하단 인디케이터 바 */}
-      <div className={`flex-shrink-0 flex items-end justify-center pb-2 pt-[12px] ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
-        <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
-      </div>
+      {!keyboardOpen && (
+        <div className={`flex-shrink-0 flex items-end justify-center pb-2 pt-[12px] ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
+          <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
+        </div>
+      )}
     </div>
   );
 }

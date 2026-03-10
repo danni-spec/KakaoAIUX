@@ -45,7 +45,7 @@ export function NotificationBanner({ isOpen, onClose }: NotificationBannerProps)
         <SquircleAvatar
           src="/profile-jieun.png"
           alt="이해수"
-          className="w-[38px] h-[38px] flex-shrink-0"
+          className="w-[48px] h-[48px] flex-shrink-0"
         />
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-[#191919] leading-tight">이해수 ❤️</p>
