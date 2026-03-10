@@ -49,10 +49,13 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
       setViewportHeight(vv.height);
       setKeyboardOpen(vv.height < window.innerHeight * 0.75);
 
-      // iOS Safari에서 키보드로 인해 viewport가 스크롤되는 것을 보정
+      // 브라우저가 화면을 밀어올리는 것을 강제 차단
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+
       if (containerRef.current) {
         containerRef.current.style.height = `${vv.height}px`;
-        containerRef.current.style.transform = `translateY(${vv.offsetTop}px)`;
       }
 
       requestAnimationFrame(() => {
@@ -225,12 +228,14 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   return (
     <div
       ref={containerRef}
-      className={`fixed top-0 left-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      className={`absolute inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
         width: "100%",
-        height: viewportHeight ? `${viewportHeight}px` : "100dvh",
+        maxWidth: "100%",
+        height: viewportHeight ? `${viewportHeight}px` : "100%",
         paddingTop: "env(safe-area-inset-top)",
         overflow: "hidden",
+        overflowX: "hidden",
       }}
     >
       <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
@@ -300,7 +305,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`px-3 min-h-[36px] flex items-center text-[15px] leading-relaxed ${
+                    className={`px-3 py-[8px] min-h-[36px] flex items-center text-[15px] leading-[1.35] ${
                       isMe
                         ? "bg-[#FEE500] text-[#191919]"
                         : darkMode
