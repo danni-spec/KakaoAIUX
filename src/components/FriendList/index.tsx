@@ -79,7 +79,7 @@ function calcIncrementalAngle(
 export function FriendList() {
   const [gnbTab, setGnbTab] = useState(0); // 0: 친구, 1: 채팅, 2~4: 기타
   const chatRoomActions = useChatRooms();
-  const { activeChatRoomId, chatRooms } = chatRoomActions;
+  const { activeChatRoomId, activeChatRoom, chatRooms } = chatRoomActions;
   const totalUnread = chatRooms.reduce((sum, r) => sum + r.unreadCount, 0);
   const [aiPopupOpen, setAiPopupOpen] = useState(false);
   const [darkModeOverlayOpen, setDarkModeOverlayOpen] = useState(false);
@@ -232,10 +232,11 @@ export function FriendList() {
   const mouseCenterSumRef = useRef<{ sx: number; sy: number }>({ sx: 0, sy: 0 });
   const mousePointCountRef = useRef(0);
   const mouseCenterRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const mouseGesturePhaseRef = useRef<GesturePhase>("idle");
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
     mouseDownRef.current = true;
+    mouseGesturePhaseRef.current = "pending";
     circlePointsRef.current = [{ x: e.clientX, y: e.clientY }];
     circleFiredRef.current = false;
     mouseAngleRef.current = 0;
@@ -247,11 +248,40 @@ export function FriendList() {
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (!mouseDownRef.current || circleFiredRef.current) return;
+      const phase = mouseGesturePhaseRef.current;
+      if (phase === "idle" || phase === "scroll") return;
+
+      const x = e.clientX;
+      const y = e.clientY;
+
+      if (phase === "pending") {
+        circlePointsRef.current.push({ x, y });
+        mousePointCountRef.current++;
+        mouseCenterSumRef.current.sx += x;
+        mouseCenterSumRef.current.sy += y;
+        mouseCenterRef.current = {
+          x: mouseCenterSumRef.current.sx / mousePointCountRef.current,
+          y: mouseCenterSumRef.current.sy / mousePointCountRef.current,
+        };
+        const dx = Math.abs(x - circlePointsRef.current[0].x);
+        const dy = Math.abs(y - circlePointsRef.current[0].y);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist >= DIRECTION_DECIDE_DISTANCE) {
+          if (dx > 0 && dy / dx >= VERTICAL_RATIO) {
+            mouseGesturePhaseRef.current = "scroll";
+            circlePointsRef.current = [];
+            return;
+          }
+          mouseGesturePhaseRef.current = "gesture";
+        }
+        return;
+      }
+
       e.preventDefault();
-      circlePointsRef.current.push({ x: e.clientX, y: e.clientY });
+      circlePointsRef.current.push({ x, y });
       mousePointCountRef.current++;
-      mouseCenterSumRef.current.sx += e.clientX;
-      mouseCenterSumRef.current.sy += e.clientY;
+      mouseCenterSumRef.current.sx += x;
+      mouseCenterSumRef.current.sy += y;
       mouseCenterRef.current = {
         x: mouseCenterSumRef.current.sx / mousePointCountRef.current,
         y: mouseCenterSumRef.current.sy / mousePointCountRef.current,
@@ -267,6 +297,7 @@ export function FriendList() {
           circleFiredRef.current = true;
           circlePointsRef.current = [];
           mouseDownRef.current = false;
+          mouseGesturePhaseRef.current = "idle";
           openAIPopup();
         }
       }
@@ -276,12 +307,13 @@ export function FriendList() {
 
   const handleMouseUp = useCallback(() => {
     mouseDownRef.current = false;
+    mouseGesturePhaseRef.current = "idle";
     circlePointsRef.current = [];
   }, []);
 
   return (
     <div
-      className={`h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
+      className={`min-h-dvh h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
@@ -299,6 +331,7 @@ export function FriendList() {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
         {/* ── 탭 0: 친구 목록 ── */}
         {gnbTab === 0 && (
@@ -330,7 +363,14 @@ export function FriendList() {
         inputRef={aiInputRef}
         darkMode={darkMode}
         onDarkModeToggle={setDarkMode}
-        fromChatRoom={!!activeChatRoomId}
+        suggestContext={
+          activeChatRoomId && activeChatRoom
+            ? (activeChatRoom.messages.length <= 1 ? "chat-room-new" : "chat-room")
+            : gnbTab === 1
+              ? "chat-list"
+              : "friend"
+        }
+        chatPartnerName={activeChatRoom?.members.length === 1 ? activeChatRoom.members[0].name : undefined}
         onCreateChatRoom={(members, initialMessage) => {
           const { openDirectChat, createGroupChat, sendMessage } = chatRoomActions;
           let room;

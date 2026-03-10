@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
+import {
+  AI_SENT_BUBBLE_CLASS,
+  AI_SENT_BUBBLE_STYLE,
+  AI_RECEIVED_BUBBLE_CLASS,
+  AI_RECEIVED_BUBBLE_STYLE,
+} from "../../constants/chat";
 
 // ── 채팅 메시지 타입 ──
 interface ChatMessage {
@@ -52,7 +57,7 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[]): Prom
     return "천만에요! 또 필요한 게 있으면 언제든 말씀해주세요 :)";
   }
   if (lower.includes("대화 요약") || lower.includes("메시지 요약") || lower.includes("요약해")) {
-    return "토요일 저녁 7시에 판교역 근처에서 같이 밥 먹기로 함. 오기 전에 집에 들러서 쿠폰 꼭 챙겨오라고 함. 맛집 후보로 파스타집이랑 초밥집 중에 고르는 중. 가는 길에 해수 사무실 들러서 픽업하기로 함.";
+    return "오늘 저녁 7시에 판교에서 만나기로 함. 판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함. 해수가 회사 일이 늦게 끝나서 판교역 대신 사무실 앞으로 픽업하기로 함.";
   }
 
   return AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)];
@@ -87,6 +92,8 @@ function createRecognition(): SpeechRecognitionInstance | null {
   return r;
 }
 
+export type SuggestContext = "friend" | "chat-list" | "chat-room" | "chat-room-new";
+
 interface AILayerPopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,22 +101,48 @@ interface AILayerPopupProps {
   darkMode: boolean;
   onDarkModeToggle: (value: boolean) => void;
   onCreateChatRoom?: (memberNames: string[], initialMessage?: string) => void;
-  fromChatRoom?: boolean;
+  suggestContext?: SuggestContext;
+  chatPartnerName?: string; // 1:1 채팅방 상대 이름 (서제스트 개인화용)
 }
 
-// 탭별 추천 칩
-const FRIEND_TAB_SUGGESTIONS = [
-  "다크모드 켜줘",
-  "이해수에게 메시지 보내",
-  "생일 친구 선물 추천",
-  "판교역 가는 길",
-];
-const CHAT_TAB_SUGGESTIONS = [
-  "대화 요약해줘",
-  "새 채팅방 만들어",
-  "안읽은 메시지 알려줘",
-  "다크모드 켜줘",
-];
+// 맥락별 추천 칩
+const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
+  friend: [
+    "다크모드 켜줘",
+    "이해수에게 메시지 보내",
+    "생일 친구 선물 추천",
+    "판교역 가는 길",
+  ],
+  "chat-list": [
+    "새 채팅방 만들어줘",
+    "최근 대화 요약해줘",
+    "안읽은 메시지 알려줘",
+    "다크모드 켜줘",
+  ],
+  "chat-room": [
+    "대화 요약해줘",
+    "이해수에게 답장",
+    "이 대화 핵심만 정리해줘",
+    "다음에 뭐라고 말할까",
+  ],
+  "chat-room-new": [
+    "인사해줘",
+    "첫 메시지 추천해줘",
+    "오늘 일정 공유해줘",
+    "이해수에게 안부 전해줘", // 1:1일 때 chatPartnerName으로 치환, 그룹이면 "단톡방에 인사해줘"로 대체
+  ],
+};
+
+function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string): string[] {
+  const base = SUGGESTIONS_BY_CONTEXT[ctx];
+  if (ctx === "chat-room-new" && !chatPartnerName) {
+    return base.map((s) => (s.includes("이해수에게") ? "단톡방에 인사해줘" : s));
+  }
+  if (ctx === "chat-room" && !chatPartnerName) {
+    return base.map((s) => (s.includes("이해수에게 답장") ? "답장해줘" : s));
+  }
+  return base;
+}
 
 // 음성 명령어 → 액션 매핑
 const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
@@ -175,7 +208,7 @@ function extractGiftRecipient(text: string): string {
 
 const CHAT_BOLD_PARTS = [
   "대화 요약, 선물 추천, 길 찾기, 다크 모드 전환",
-  "집에 들러서 쿠폰 꼭 챙겨오라고 함",
+  "판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함",
 ];
 
 function renderChatWithBold(display: string): React.ReactNode {
@@ -270,7 +303,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, fromChatRoom }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
   const [, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -287,6 +320,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [showDismiss, setShowDismiss] = useState(false);
   const [floatPos, setFloatPos] = useState<{ x: number; y: number } | null>(null);
   const [dismissing, setDismissing] = useState(false);
+  const [meetingMode, setMeetingMode] = useState(false);
+  const [meetingRecording, setMeetingRecording] = useState(false);
+  const [meetingPaused, setMeetingPaused] = useState(false);
+  const [meetingSaved, setMeetingSaved] = useState(false);
+  const [meetingElapsed, setMeetingElapsed] = useState(0);
+  const meetingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [directionMode, setDirectionMode] = useState(false);
   const [directionDest, setDirectionDest] = useState("");
   const [navActive, setNavActive] = useState(false);
@@ -384,6 +423,48 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       clearTimeout(loadingTimerRef.current);
       loadingTimerRef.current = null;
     }
+  }
+
+  function clearMeetingTimer() {
+    if (meetingTimerRef.current) {
+      clearInterval(meetingTimerRef.current);
+      meetingTimerRef.current = null;
+    }
+  }
+
+  function startMeetingRecording() {
+    setMeetingRecording(true);
+    if (!meetingPaused) setMeetingElapsed(0);
+    setMeetingPaused(false);
+    clearMeetingTimer();
+    meetingTimerRef.current = setInterval(() => {
+      setMeetingElapsed((prev) => prev + 1);
+    }, 1000);
+  }
+
+  function stopMeetingRecording() {
+    clearMeetingTimer();
+    setMeetingRecording(false);
+    setMeetingPaused(true);
+  }
+
+  function completeMeetingRecording() {
+    stopMeetingRecording();
+    setMeetingSaved(true);
+  }
+
+  function exitMeetingMode() {
+    stopMeetingRecording();
+    setMeetingMode(false);
+    setMeetingElapsed(0);
+    setMeetingPaused(false);
+    setMeetingSaved(false);
+  }
+
+  function formatElapsed(sec: number): string {
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
   }
 
   function clearNavTimer() {
@@ -793,10 +874,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setChoonsikFullscreen(false);
       setWishlistView(false);
       setWishlistPhase("product");
+      exitMeetingMode();
       updateInputText("");
       return;
     }
-    if (textMode || directionMode || darkmodeView || wishlistView) {
+    if (textMode || directionMode || darkmodeView || wishlistView || meetingMode) {
       doStop();
       return;
     }
@@ -806,7 +888,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       doStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, textMode, directionMode, darkmodeView, wishlistView]);
+  }, [isOpen, textMode, directionMode, darkmodeView, wishlistView, meetingMode]);
 
   const draggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -918,11 +1000,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     <div
       ref={containerRef}
       className="absolute inset-0 z-[60]"
-      style={{ pointerEvents: isOpen ? "auto" : "none" }}
+      style={{ pointerEvents: "none" }}
     >
-      {/* ── 배경 (딤 없음, 닫기 영역) ── */}
+      {/* ── 배경 (딤 없음, 닫기 영역, minimized/닫힘 시 클릭 패스스루) ── */}
       <div
         className="absolute inset-0"
+        style={{ pointerEvents: isOpen && !minimized ? "auto" : "none" }}
         onClick={handleClose}
         onTouchEnd={handleClose}
         aria-hidden="true"
@@ -932,7 +1015,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       {showDismiss && (
         <div
           className={`absolute left-1/2 -translate-x-1/2 w-[40px] h-[40px] rounded-full flex items-center justify-center transition-all duration-200 ${nearDismiss ? "bg-red-500 scale-110" : darkMode ? "bg-white/70" : "bg-black/70"}`}
-          style={{ bottom: 104, opacity: dismissing ? 0 : 1, zIndex: 60 }}
+          style={{ bottom: 104, opacity: dismissing ? 0 : 1, zIndex: 60, pointerEvents: "auto" }}
         >
           <svg className={`w-5 h-5 ${nearDismiss || !darkMode ? "text-white" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -943,8 +1026,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <div
         className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer select-none touch-none ${isDragging || dismissing ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
         style={floatPos
-          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none" }
-          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none" }
+          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none", pointerEvents: minimized ? "auto" : undefined }
+          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none", pointerEvents: minimized ? "auto" : undefined }
         }
         onClick={() => { if (wasDraggedRef.current) { wasDraggedRef.current = false; return; } if (!showDismiss && !draggingRef.current) { setMinimized(false); setFloatPos(null); } }}
         onTouchStart={handleFloatTouchStart}
@@ -965,16 +1048,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </div>
 
       <>
-      {/* ── AI 레이어 카드 (상하 여백 60px) ── */}
+      {/* ── AI 레이어 카드 (외부 여백 좌우하 16px, p-4 제거로 중복 여백 해소) ── */}
       <div
-        className="absolute left-4 right-4 overflow-hidden transition-all duration-300"
+        className="absolute transition-all duration-300"
         style={{
+          left: 16,
+          right: 16,
           top: (navActive || navArrived) ? 100 : undefined,
-          bottom: isOpen ? (fromChatRoom ? 96 : 16) : -300,
+          bottom: isOpen ? 16 : -300,
           opacity: isOpen && !minimized ? 1 : 0,
           transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
-          pointerEvents: minimized ? "none" : "auto",
+          pointerEvents: isOpen && !minimized ? "auto" : "none",
         }}
       >
         <div className={`relative ${navActive || navArrived ? "h-full" : ""}`}>
@@ -986,7 +1071,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               className="absolute inset-[-100%] animate-gradient-spin"
               style={{
                 background:
-                  "conic-gradient(from 0deg, #ff1493, rgba(255,255,255,0.5), #b026ff, #2563ff, rgba(255,255,255,0.5), #00d4ff, #b026ff, #ff6600, rgba(255,255,255,0.5), #ff1493)",
+                  "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)",
               }}
             />
           </div>
@@ -998,20 +1083,140 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
-              {/* ── 우상단 내리기 버튼 (텍스트 모드에서는 숨김) ── */}
-              {!textMode && (
-                <div className="absolute z-10 flex items-center gap-2" style={{ top: 16, right: 16 }}>
-                  <button
-                    type="button"
-                    className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
-                    style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
-                    aria-label="접기"
-                    onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
-                  >
-                    <svg className={`w-5 h-5 ${darkMode ? "text-gray-200" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
+              {/* ── 좌상단 회의 모드 버튼 + 우상단 내리기 버튼 ── */}
+              {!textMode && !darkmodeView && !meetingMode && (
+                <>
+                  <div className="absolute z-10" style={{ top: 16, left: 16 }}>
+                    <button
+                      type="button"
+                      className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
+                      style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
+                      aria-label="회의 모드"
+                      onClick={(e) => { e.stopPropagation(); doStop(); setMeetingMode(true); }}
+                    >
+                      <svg className={`w-5 h-5 ${darkMode ? "text-gray-200" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="absolute z-10" style={{ top: 16, right: 16 }}>
+                    <button
+                      type="button"
+                      className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
+                      style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
+                      aria-label="접기"
+                      onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
+                    >
+                      <svg className={`w-5 h-5 ${darkMode ? "text-gray-200" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              )}
+              {/* ── 회의 모드 UI ── */}
+              {meetingMode && (
+                <div className="relative flex flex-col items-center px-5 pt-8 pb-5 pointer-events-auto">
+                  {/* 우상단 접기 버튼 */}
+                  {meetingRecording && !meetingSaved && (
+                    <button
+                      type="button"
+                      className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center active:opacity-70 ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+                      onClick={() => setMinimized(true)}
+                    >
+                      <svg className={`w-4 h-4 ${darkMode ? "text-gray-300" : "text-gray-500"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
+                  {meetingSaved ? (
+                    <>
+                      {/* 저장 완료 아이콘 */}
+                      <div className="w-14 h-14 rounded-full bg-[#FF3B30] mb-5" />
+                      {/* 저장 안내 문구 */}
+                      <p className={`text-[17px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                        녹음이 저장되었습니다
+                      </p>
+                      <p className={`text-[14px] text-center ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                        톡클라우드에서 확인이 가능합니다
+                      </p>
+                      {/* 확인 버튼 */}
+                      <div className="flex gap-3 mt-8 w-full">
+                        <button
+                          type="button"
+                          className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                          style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)" }}
+                          onClick={() => exitMeetingMode()}
+                        >
+                          확인
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* 녹음 표시 */}
+                      <div className="flex items-center gap-2 mb-6">
+                        <div className={`w-3 h-3 rounded-full ${meetingRecording ? "bg-red-500 animate-pulse" : darkMode ? "bg-gray-500" : "bg-gray-400"}`} />
+                        <p className={`text-[14px] font-medium ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
+                          {meetingRecording ? "녹음 중" : "대기 중"}
+                        </p>
+                      </div>
+                      {/* 경과 시간 */}
+                      <p className={`text-[48px] font-bold tabular-nums tracking-tight ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                        {formatElapsed(meetingElapsed)}
+                      </p>
+                      {/* 버튼들 */}
+                      <div className="flex gap-3 mt-8 w-full">
+                        {!meetingRecording ? (
+                          <>
+                            <button
+                              type="button"
+                              className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                              style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                              onClick={() => exitMeetingMode()}
+                            >
+                              나가기
+                            </button>
+                            <button
+                              type="button"
+                              className="flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold text-white active:opacity-80"
+                              style={{ background: "#FF3B30" }}
+                              onClick={() => startMeetingRecording()}
+                            >
+                              {meetingPaused ? "녹음 재개" : "녹음 시작"}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                              style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                              onClick={() => stopMeetingRecording()}
+                            >
+                              중단
+                            </button>
+                            <button
+                              type="button"
+                              className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                              style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                              onClick={() => setMinimized(true)}
+                            >
+                              접기
+                            </button>
+                            <button
+                              type="button"
+                              className="flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold text-white active:opacity-80"
+                              style={{ background: "#34C759" }}
+                              onClick={() => completeMeetingRecording()}
+                            >
+                              완료
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
               {/* ── 위시리스트 캐로셀 (giftResult, textMode에서 카드 상단에 표시) ── */}
@@ -1054,26 +1259,37 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               )}
 
               {/* 빈영역 센터: 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
+              {(() => {
+                const centerHidden = textMode || choonsikCardView || directionMode || darkmodeView || wishlistView || meetingMode;
+                return (
               <div
-                className="flex flex-col items-center justify-center gap-1 pointer-events-none"
-                style={{ opacity: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 1, visibility: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? "hidden" : "visible", height: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : "auto", paddingTop: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 32, paddingBottom: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 16 }}
+                className="flex flex-col items-center justify-center gap-1 pointer-events-none overflow-hidden"
+                style={{
+                  opacity: centerHidden ? 0 : 1,
+                  maxHeight: centerHidden ? 0 : 400,
+                  paddingTop: centerHidden ? 0 : 32,
+                  paddingBottom: centerHidden ? 0 : 16,
+                  transform: centerHidden ? "translateY(8px)" : "translateY(0)",
+                  visibility: centerHidden ? "hidden" : "visible",
+                  transition: `opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1), max-height 0.4s cubic-bezier(0.32, 0.72, 0, 1), padding 0.4s cubic-bezier(0.32, 0.72, 0, 1), transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s ${centerHidden ? "0.4s" : "0s"}`,
+                }}
               >
                 {summaryResult ? (
                   /* ── 대화 요약 결과 (보낸/받은 메시지 형식) ── */
-                  <div className="w-full pl-6 pr-4 pt-4 pb-2 overflow-y-auto max-h-full pointer-events-auto">
+                  <div className="w-full pl-4 pr-3 pt-4 pb-2 overflow-y-auto max-h-full pointer-events-auto">
                     {summaryResult.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                        className={`flex mb-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                       >
                         {msg.role === "user" ? (
-                          <div className="max-w-[75%] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]" style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
+                          <div className={AI_SENT_BUBBLE_CLASS} style={AI_SENT_BUBBLE_STYLE}>
                             {msg.text}
                           </div>
                         ) : (
-                          <div className={`max-w-[90%] text-[17px] font-normal leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
+                          <div className={`${AI_RECEIVED_BUBBLE_CLASS} leading-ai-reply ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={AI_RECEIVED_BUBBLE_STYLE}>
                             {msg.id === "sum-a-1" ? (
-                              <>토요일 저녁 7시에 판교역 근처에서 같이 밥 먹기로 함. 오기 전에 <span className="font-semibold">집에 들러서 쿠폰 꼭 챙겨오라고 함</span>. 맛집 후보로 파스타집이랑 초밥집 중에 고르는 중. 가는 길에 해수 사무실 들러서 픽업하기로 함.</>
+                              <>오늘 저녁 7시에 판교에서 만나기로 함. <span className="font-semibold">판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함</span>. 해수가 회사 일이 늦게 끝나서 판교역 대신 사무실 앞으로 픽업하기로 함.</>
                             ) : (
                               msg.text
                             )}
@@ -1116,7 +1332,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 )}
                 {!summaryResult && !choonsikCardView && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
-                  style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#1C1C1E") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#a1a1aa" : "#374151") }}
+                  style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#1C1C1E") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#ffffff" : "#374151") }}
                 >
                   {isLoading
                     ? "처리 중..."
@@ -1127,6 +1343,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         : replyMode ? "이해수에게 답장" : "듣고 있어요! 편하게 말씀해 주세요."}
                 </p>}
               </div>
+                );
+              })()}
               {/* ── Direction 모드: 지도 UI (cross-fade) ── */}
               <div
                 className="absolute inset-x-0 top-0 bottom-0 flex flex-col transition-opacity duration-500 z-20"
@@ -1562,20 +1780,20 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 >
                   <div
                     ref={chatScrollRef}
-                    className="overflow-y-auto scrollbar-hide pl-6 pr-4 pt-4 pb-2"
+                    className="overflow-y-auto scrollbar-hide pl-4 pr-3 pt-4 pb-2"
                     style={{ height: 240 }}
                   >
                   {chatMessages.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`flex mb-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                      className={`flex mb-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       {msg.role === "user" ? (
-                        <div className="max-w-[75%] px-3.5 py-2.5 text-[16px] font-medium leading-relaxed bg-[#FEE500] text-[#191919]" style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
+                        <div className={AI_SENT_BUBBLE_CLASS} style={AI_SENT_BUBBLE_STYLE}>
                           {msg.text}
                         </div>
                       ) : (
-                        <div className={`max-w-[90%] text-[17px] font-normal leading-relaxed ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
+                        <div className={`${AI_RECEIVED_BUBBLE_CLASS} leading-ai-reply ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={AI_RECEIVED_BUBBLE_STYLE}>
                           {renderChatWithBold(msg.id === typingMessageId ? msg.text.slice(0, typingDisplayedLength) : msg.text)}
                         </div>
                       )}
@@ -1606,16 +1824,44 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               <div
                 className="px-4 pb-4 transition-all duration-[400ms]"
-                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ paddingTop: (wishlistView || meetingMode) ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, paddingBottom: meetingMode ? 0 : undefined, height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
-                {!textMode && !choonsikCardView && !directionMode && !darkmodeView && !wishlistView && !summaryResult && !giftResult && !isLoading && !statusMessage && !transcript && !interimText && (
+                {!directionMode && !darkmodeView && !wishlistView && (() => {
+                  const chipsVisible = !textMode && !choonsikCardView && !summaryResult && !giftResult && !isLoading && !statusMessage && !transcript && !interimText;
+                  return (
+                  <div
+                    className="overflow-hidden transition-all duration-[400ms]"
+                    style={{
+                      opacity: chipsVisible ? 1 : 0,
+                      maxHeight: chipsVisible ? 80 : 0,
+                      transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                    }}
+                  >
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-4">
-                    {(fromChatRoom ? CHAT_TAB_SUGGESTIONS : FRIEND_TAB_SUGGESTIONS).map((t) => t === "다크모드 켜줘" ? (darkMode ? "다크모드 꺼줘" : "다크모드 켜줘") : t).map((text) => (
+                    {getSuggestionsForContext(suggestContext, chatPartnerName).map((t) => {
+                      let text = t === "다크모드 켜줘" ? (darkMode ? "다크모드 꺼줘" : "다크모드 켜줘") : t;
+                      if ((suggestContext === "chat-room" || suggestContext === "chat-room-new") && text.includes("이해수") && chatPartnerName) {
+                        text = text.replace("이해수", chatPartnerName);
+                      }
+                      return text;
+                    }).map((text, i) => (
                       <button
-                        key={text}
+                        key={`${text}-${i}`}
                         type="button"
-                        className={`flex-shrink-0 px-[14px] h-[40px] rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${darkMode ? "bg-white/[0.12] text-gray-200" : "bg-black/[0.06] text-gray-700"}`}
+                        className={`flex-shrink-0 relative overflow-hidden px-[14px] h-[40px] rounded-full text-[14px] font-medium whitespace-nowrap transition-colors backdrop-blur-[30px] ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                        style={darkMode
+                          ? {
+                              background: "radial-gradient(ellipse 100% 80% at 0% 0%, rgba(255,255,255,0.35) 0%, transparent 55%), rgba(255,255,255,0.12)",
+                              border: "1px solid rgba(255,255,255,0.35)",
+                              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                            }
+                          : {
+                              background: "radial-gradient(ellipse 100% 80% at 0% 0%, rgba(255,255,255,0.7) 0%, transparent 55%), rgba(255,255,255,0.5)",
+                              border: "1px solid rgba(255,255,255,0.6)",
+                              boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                            }
+                        }
                         onClick={(e) => {
                           e.stopPropagation();
                           updateInputText(text);
@@ -1627,17 +1873,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       </button>
                     ))}
                   </div>
-                )}
+                  </div>
+                  );
+                })()}
                 <div
-                  className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
-                  style={{
-                    ...(darkMode ? {
-                      boxShadow: "inset 0 0 0 0.5px rgba(255,255,255,0.08)",
-                    } : {
-                      background: "linear-gradient(135deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.60) 100%)",
-                      boxShadow: "0 2px 16px rgba(0,0,0,0.06), 0 0 0 0.5px rgba(255,255,255,0.8), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -0.5px 0 rgba(0,0,0,0.04)",
-                    }),
-                  }}
+                  className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : ""}`}
+                  style={darkMode ? { boxShadow: "0 0 6px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.2)" } : { backgroundColor: "rgba(255,255,255,0.96)", boxShadow: "0 0 6px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,1)" }}
                   onClick={() => {
                     if (!textSending && !sendStatus) {
                       setTextMode(true);
@@ -1703,7 +1944,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   ) : (
                     <button
                       type="button"
-                      className="w-9 h-9 rounded-full flex-shrink-0 mr-[-4px] flex items-center justify-center"
+                      className="w-9 h-9 rounded-full flex-shrink-0 mr-[-4px] flex items-center justify-center transition-transform duration-200 active:scale-95"
                       style={{ background: "linear-gradient(135deg, #FF538A, #E91E8A)" }}
                       aria-label={textMode ? "음성 입력" : "텍스트 입력"}
                       disabled={textSending || !!sendStatus}
@@ -1728,13 +1969,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         }
                       }}
                     >
-                      {textMode ? (
-                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <span className="relative inline-flex items-center justify-center w-5 h-5">
+                        <svg
+                          className={`absolute w-5 h-5 text-white transition-opacity duration-300 ${textMode ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden
+                        >
                           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
                         </svg>
-                      ) : (
-                        <span className="text-white text-[16px] font-bold leading-none">T</span>
-                      )}
+                        <span
+                          className={`absolute text-white text-[16px] font-bold leading-none transition-opacity duration-300 ${!textMode ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                          aria-hidden
+                        >
+                          T
+                        </span>
+                      </span>
                     </button>
                   )}
                 </div>

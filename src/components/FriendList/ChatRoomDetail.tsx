@@ -201,9 +201,10 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
 
   return (
     <div
-      className={`absolute inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      className={`fixed inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
@@ -266,7 +267,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                   )}
                 </div>
               )}
-              <div className={`max-w-[65%] ${isMe ? "items-end" : "items-start"}`}>
+              <div className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}>
                 {showAvatar && !isMe && (
                   <p className={`text-[12px] mb-1 ${darkMode ? "text-gray-300" : "text-[#000000]"}`}>
                     {msg.sender}
@@ -274,7 +275,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`px-3 min-h-[36px] flex items-center text-[15px] leading-relaxed ${
+                    className={`px-3 py-[9px] min-h-[36px] flex items-center text-[15px] leading-snug ${
                       isMe
                         ? "bg-[#FEE500] text-[#191919]"
                         : darkMode

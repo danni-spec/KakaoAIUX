@@ -47,12 +47,15 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
   return (
     <nav
       className={[
-        "absolute inset-x-[30px] bottom-[30px] z-20",
+        "fixed left-[30px] right-[30px] z-20",
         "h-[62px] rounded-[80px] overflow-hidden flex items-center",
         "backdrop-blur-[30px]",
         darkMode ? "bg-[#2c2c2e]/70" : "bg-white/[0.50]",
       ].join(" ")}
-      style={{ boxShadow: darkMode ? GLASS_SHADOW_DARK : GLASS_SHADOW_LIGHT }}
+      style={{
+        boxShadow: darkMode ? GLASS_SHADOW_DARK : GLASS_SHADOW_LIGHT,
+        bottom: "calc(30px + env(safe-area-inset-bottom))",
+      }}
     >
       <div
         className="absolute inset-0 pointer-events-none"
