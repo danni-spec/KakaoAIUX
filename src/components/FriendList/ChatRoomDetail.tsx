@@ -194,41 +194,39 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
       <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
       {/* 헤더 */}
       <div
-        className={`relative flex items-center px-4 h-[56px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-[#abc1d1]"}`}
+        className={`relative flex items-center px-4 h-[44px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-[#abc1d1]"}`}
       >
         <button
           type="button"
-          className="p-1 z-10 -ml-[4px]"
+          className="z-10"
           onClick={closeChatRoom}
         >
-          <svg className={`w-6 h-6 ${darkMode ? "text-white" : "text-[#191919]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
+          <img src="/backIcon.svg" alt="뒤로" className={`w-[24px] h-[24px] ${darkMode ? "invert" : ""}`} />
         </button>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className={`text-[16px] font-semibold truncate ${darkMode ? "text-white" : "text-[#191919]"}`}>
+          <p className={`text-[17px] font-bold truncate ${darkMode ? "text-white" : "text-[#191919]"}`}>
             {activeChatRoom.name}
             {activeChatRoom.members.length > 1 && (
-              <span className="text-[16px] font-semibold ml-1 text-[#6c6c6c]">
+              <span className="text-[17px] font-bold ml-1 text-[#6c6c6c]">
                 {activeChatRoom.members.length + 1}
               </span>
             )}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2 z-10">
-          <svg className={`w-5 h-5 ${darkMode ? "text-gray-300" : "text-[#191919]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <svg className={`w-5 h-5 ${darkMode ? "text-gray-300" : "text-[#191919]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+        <div className="ml-auto flex items-center gap-[18px] z-10" style={{ marginRight: 4 }}>
+          <button type="button" aria-label="검색">
+            <img src="/searchIcon.svg" alt="" className={`w-[24px] h-[24px] ${darkMode ? "invert" : ""}`} />
+          </button>
+          <button type="button" aria-label="더보기">
+            <img src="/moreIcon.svg" alt="" className={`w-[24px] h-[24px] ${darkMode ? "invert" : ""}`} />
+          </button>
         </div>
       </div>
 
       {/* 메시지 영역 */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3"
+        className="flex-1 overflow-y-auto scrollbar-hide px-[10px] py-3"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -285,38 +283,47 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
       </div>
 
       {/* 입력 영역 */}
-      <div className={`flex items-center gap-2 px-3 py-2 flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
-        <button type="button" className="p-1.5 flex-shrink-0">
-          <svg className={`w-6 h-6 ${darkMode ? "text-gray-400" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
+      <div className={`flex items-center gap-[10px] px-[12px] py-[8px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
+        <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
+          <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
         </button>
-        <input
-          ref={inputRef}
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-          placeholder="메시지 입력"
-          className={`flex-1 text-[14px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-gray-400"}`}
-          style={{ fontSize: "16px" }}
-        />
-        {text.trim() && (
-          <button
-            type="button"
-            className="w-[32px] h-[32px] rounded-full bg-[#FEE500] flex items-center justify-center flex-shrink-0 active:opacity-80"
-            onClick={handleSend}
-          >
-            <svg className="w-4 h-4 text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
+        <div className={`flex-1 flex items-center h-[36px] rounded-[18px] pl-[12px] pr-[6px] ${darkMode ? "bg-[#3a3a3c]" : "bg-[#f1f1f1]"}`}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="메시지 입력"
+            className={`flex-1 text-[14px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
+            style={{ fontSize: "14px" }}
+          />
+          <button type="button" className="flex-shrink-0 ml-[4px]">
+            <img src="/emojiIcon.svg" alt="이모티콘" className={`w-[23px] h-[23px] ${darkMode ? "invert" : ""}`} />
           </button>
-        )}
+        </div>
+        <div className="flex-shrink-0 w-[32px] h-[32px]">
+          {text.trim() ? (
+            <button
+              type="button"
+              className="w-[32px] h-[32px] rounded-full bg-[#FEE500] flex items-center justify-center active:opacity-80"
+              onClick={handleSend}
+            >
+              <svg className="w-[18px] h-[18px] text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          ) : (
+            <button type="button" className={`w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
+              <img src="/sharpIcon.svg" alt="샵" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
+            </button>
+          )}
+        </div>
       </div>
       {/* 하단 인디케이터 바 */}
       <div className={`flex-shrink-0 flex items-end justify-center pb-2 pt-[12px] ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>

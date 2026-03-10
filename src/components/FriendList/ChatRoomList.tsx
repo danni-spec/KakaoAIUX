@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useChatRooms } from "../../contexts/ChatRoomContext";
 import { SquircleAvatar, SquircleDiv } from "./SquircleAvatar";
+import { ChipBar } from "./ChipBar";
+import type { ChipItem } from "./ChipBar";
+import { HeaderIconBar } from "./HeaderIconBar";
+import type { HeaderIcon } from "./HeaderIconBar";
 
 function formatTime(ts: number): string {
   const now = Date.now();
@@ -16,55 +20,50 @@ function formatTime(ts: number): string {
   return "어제";
 }
 
-type ChipId = "all" | "unread" | "chatgpt" | "add";
+const CHAT_HEADER_ICONS: HeaderIcon[] = [
+  { src: "/searchIcon.svg", label: "검색" },
+  { src: "/newChatIcon.svg", label: "새채팅" },
+  { src: "/settingIcon.svg", label: "설정" },
+];
+
+const CHAT_CHIPS: ChipItem[] = [
+  { id: "all", label: "전체" },
+  {
+    id: "unread",
+    label: "안읽음",
+    inactiveIcon: <img src="/chattabIcoFolder.svg" alt="" className="w-[18px] h-[18px]" />,
+  },
+  { id: "chatgpt", label: "ChatGPT" },
+  {
+    id: "add",
+    label: "",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    ),
+  },
+];
 
 export function ChatRoomList({ darkMode }: { darkMode: boolean }) {
   const { chatRooms, openChatRoom } = useChatRooms();
-  const [selectedChip, setSelectedChip] = useState<ChipId>("all");
+  const [selectedChip, setSelectedChip] = useState("all");
 
   return (
     <div className="pb-28">
-      {/* 헤더 */}
-      <div className="px-4 pt-1 pb-3">
+      {/* 헤더 — 친구탭 GNB와 동일한 h-[56px] */}
+      <div className="px-4 h-[56px] flex items-center justify-between">
         <h2 className={`text-[22px] font-bold ${darkMode ? "text-white" : "text-[#191919]"}`}>
           채팅
         </h2>
+        <HeaderIconBar icons={CHAT_HEADER_ICONS} darkMode={darkMode} />
       </div>
 
-      {/* 칩: 친구탭과 동일한 스타일 */}
-      <div className={`flex gap-2 px-4 pb-3 pt-[5px] overflow-x-auto scrollbar-hide transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}>
-        {(["all", "unread", "chatgpt"] as ChipId[]).map((chip) => (
-          <button
-            key={chip}
-            type="button"
-            onClick={() => setSelectedChip(chip)}
-            className={`flex-shrink-0 px-[17px] h-[36px] rounded-full font-semibold text-[14px] outline outline-1 transition-colors duration-200 ${
-              selectedChip === chip
-                ? darkMode ? "bg-white text-black outline-transparent" : "bg-black text-white outline-transparent"
-                : darkMode ? "bg-[#2c2c2e] text-gray-300 outline-[#3a3a3c]" : "bg-white text-black outline-gray-200 hover:bg-gray-50"
-            }`}
-          >
-            {chip === "all" ? "전체" : chip === "unread" ? "안읽음" : "ChatGPT"}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setSelectedChip("add")}
-          className={`flex-shrink-0 w-[36px] h-[36px] rounded-full flex items-center justify-center outline outline-1 transition-colors duration-200 ${
-            selectedChip === "add"
-              ? darkMode ? "bg-white text-black outline-transparent" : "bg-black text-white outline-transparent"
-              : darkMode ? "bg-[#2c2c2e] text-gray-300 outline-[#3a3a3c]" : "bg-white text-black outline-gray-200 hover:bg-gray-50"
-          }`}
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-      </div>
+      <ChipBar chips={CHAT_CHIPS} activeId={selectedChip} onChange={setSelectedChip} darkMode={darkMode} />
 
       {/* 채팅방 리스트 */}
       <div>
-        {chatRooms.map((room) => (
+        {(selectedChip === "unread" ? chatRooms.filter((r) => r.unreadCount > 0) : chatRooms).map((room) => (
           <button
             key={room.id}
             type="button"

@@ -1,8 +1,17 @@
 import { SquircleAvatar } from "./SquircleAvatar";
+import { HeaderIconBar } from "./HeaderIconBar";
+import type { HeaderIcon } from "./HeaderIconBar";
+
+const FRIEND_HEADER_ICONS: HeaderIcon[] = [
+  { src: "/header-search.png", label: "검색" },
+  { src: "/header-add.png", label: "추가" },
+  { src: "/header-gift.png", label: "선물" },
+  { src: "/header-setting.png", label: "설정" },
+];
 
 export function Header({ darkMode = false }: { darkMode?: boolean }) {
   return (
-    <header className={`flex items-center justify-between px-4 pt-1 pb-3 transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}>
+    <header className={`flex items-center justify-between px-4 h-[56px] transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}>
       {/* 내 프로필 */}
       <div className="flex items-center gap-2.5 cursor-pointer group">
         <SquircleAvatar
@@ -16,20 +25,7 @@ export function Header({ darkMode = false }: { darkMode?: boolean }) {
       </div>
 
       {/* 우측 아이콘들: 검색, 추가, 선물, 세팅 */}
-      <div className="flex items-center gap-0.5">
-        <button className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-white/10 active:bg-white/20" : "hover:bg-gray-100 active:bg-gray-200"}`} aria-label="검색">
-          <img src="/header-search.png" alt="" className={`w-[22px] h-[22px] object-contain ${darkMode ? "invert" : ""}`} />
-        </button>
-        <button className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-white/10 active:bg-white/20" : "hover:bg-gray-100 active:bg-gray-200"}`} aria-label="추가">
-          <img src="/header-add.png" alt="" className={`w-[22px] h-[22px] object-contain ${darkMode ? "invert" : ""}`} />
-        </button>
-        <button className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-white/10 active:bg-white/20" : "hover:bg-gray-100 active:bg-gray-200"}`} aria-label="선물">
-          <img src="/header-gift.png" alt="" className={`w-[22px] h-[22px] object-contain ${darkMode ? "invert" : ""}`} />
-        </button>
-        <button className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-white/10 active:bg-white/20" : "hover:bg-gray-100 active:bg-gray-200"}`} aria-label="설정">
-          <img src="/header-setting.png" alt="" className={`w-[22px] h-[22px] object-contain ${darkMode ? "invert" : ""}`} />
-        </button>
-      </div>
+      <HeaderIconBar icons={FRIEND_HEADER_ICONS} darkMode={darkMode} />
     </header>
   );
 }

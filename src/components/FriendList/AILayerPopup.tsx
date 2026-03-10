@@ -93,7 +93,22 @@ interface AILayerPopupProps {
   darkMode: boolean;
   onDarkModeToggle: (value: boolean) => void;
   onCreateChatRoom?: (memberNames: string[], initialMessage?: string) => void;
+  fromChatRoom?: boolean;
 }
+
+// 탭별 추천 칩
+const FRIEND_TAB_SUGGESTIONS = [
+  "다크모드 켜줘",
+  "이해수에게 메시지 보내",
+  "생일 친구 선물 추천",
+  "판교역 가는 길",
+];
+const CHAT_TAB_SUGGESTIONS = [
+  "대화 요약해줘",
+  "새 채팅방 만들어",
+  "안읽은 메시지 알려줘",
+  "다크모드 켜줘",
+];
 
 // 음성 명령어 → 액션 매핑
 const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
@@ -254,7 +269,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, fromChatRoom }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
   const [, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -465,7 +480,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
   function handleTextSend() {
     if (textSendLockRef.current) return;
-    const text = inputText.trim();
+    const text = (inputTextRef.current || inputText).trim();
     if (!text) return;
     textSendLockRef.current = true;
     // replyMode일 때는 명령어 매칭 없이 바로 전송 플로우
@@ -817,8 +832,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     wasDraggedRef.current = false;
     setFloatPos({ x: mouseRelX - dragOffsetRef.current.dx, y: mouseRelY - dragOffsetRef.current.dy });
     setIsDragging(true);
+    setShowDismiss(true);
     longPressTimerRef.current = setTimeout(() => {
-      setShowDismiss(true);
       wasDraggedRef.current = true;
     }, 400);
   }
@@ -892,6 +907,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
   const handleClose = () => {
     if (wasDraggedRef.current) { wasDraggedRef.current = false; return; }
+    if (minimized) return; // 플로팅 모드에서는 배경 탭으로 닫히지 않음
     inputRef.current?.blur();
     doStop();
     onClose();
@@ -914,17 +930,17 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       {/* ── X 닫기 버튼 (센터 하단) ── */}
       {showDismiss && (
         <div
-          className={`absolute left-1/2 -translate-x-1/2 w-[40px] h-[40px] rounded-full flex items-center justify-center transition-all duration-200 ${nearDismiss ? "bg-red-500 scale-110" : "bg-black/70"}`}
+          className={`absolute left-1/2 -translate-x-1/2 w-[40px] h-[40px] rounded-full flex items-center justify-center transition-all duration-200 ${nearDismiss ? "bg-red-500 scale-110" : darkMode ? "bg-white/70" : "bg-black/70"}`}
           style={{ bottom: 104, opacity: dismissing ? 0 : 1, zIndex: 60 }}
         >
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg className={`w-5 h-5 ${nearDismiss || !darkMode ? "text-white" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </div>
       )}
       {/* ── 미니 플로팅 버튼 (항상 렌더, minimized일 때 표시) ── */}
       <div
-        className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer select-none touch-none ${isDragging ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
+        className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer select-none touch-none ${isDragging || dismissing ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
         style={floatPos
           ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none" }
           : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none" }
@@ -935,7 +951,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         onTouchEnd={handleFloatTouchEnd}
         onMouseDown={handleFloatMouseDown}
       >
-        <div className={`absolute inset-0 rounded-full backdrop-blur-[4px]`} style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)" }} />
+        <div className={`absolute inset-0 rounded-full backdrop-blur-[4px]`} style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.15)" : "none" }} />
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative w-[60px] h-[60px]">
             <img
@@ -953,7 +969,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         className="absolute left-4 right-4 transition-all duration-300"
         style={{
           top: (navActive || navArrived) ? 100 : undefined,
-          bottom: isOpen ? 96 : -300,
+          bottom: isOpen ? (fromChatRoom ? 96 : 16) : -300,
           opacity: isOpen && !minimized ? 1 : 0,
           transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
@@ -1038,8 +1054,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               {/* 빈영역 센터: 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
               <div
-                className="absolute inset-x-0 top-0 bottom-[72px] flex flex-col items-center justify-center gap-3 pointer-events-none"
-                style={{ opacity: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 1, visibility: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? "hidden" : "visible" }}
+                className="flex flex-col items-center justify-center gap-1 pointer-events-none"
+                style={{ opacity: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 1, visibility: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? "hidden" : "visible", height: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : "auto", paddingTop: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 32, paddingBottom: (textMode || choonsikCardView || directionMode || darkmodeView || wishlistView) ? 0 : 16 }}
               >
                 {summaryResult ? (
                   /* ── 대화 요약 결과 (보낸/받은 메시지 형식) ── */
@@ -1067,18 +1083,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 ) : isLoading ? (
                   /* ── 로딩 스피너 ── */
-                  <div className="relative w-[120px] h-[120px] flex items-center justify-center">
+                  <div className="relative w-[104px] h-[104px] flex items-center justify-center">
                     <div
                       className="w-[40px] h-[40px] rounded-full animate-spin-loader"
                       style={{
-                        border: "4px solid rgba(0, 0, 0, 0.1)",
-                        borderTopColor: "#000000",
+                        border: `4px solid ${darkMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"}`,
+                        borderTopColor: darkMode ? "#ffffff" : "#000000",
                       }}
                     />
                   </div>
                 ) : (
                   /* ── 보이스 오브 이펙트 ── */
-                  <div className="relative w-[120px] h-[120px]">
+                  <div className="relative w-[104px] h-[104px]">
                     <img
                       src="/voice-effect.png"
                       alt=""
@@ -1589,8 +1605,28 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               <div
                 className="px-4 pb-4 transition-all duration-[400ms]"
-                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 200, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ paddingTop: wishlistView ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, height: wishlistView ? 0 : "auto", overflow: wishlistView ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
+                {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
+                {!textMode && !choonsikCardView && !directionMode && !darkmodeView && !wishlistView && !summaryResult && !giftResult && !isLoading && !statusMessage && !transcript && !interimText && (
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-4 -mx-4 px-4">
+                    {(fromChatRoom ? CHAT_TAB_SUGGESTIONS : FRIEND_TAB_SUGGESTIONS).map((t) => t === "다크모드 켜줘" ? (darkMode ? "다크모드 꺼줘" : "다크모드 켜줘") : t).map((text) => (
+                      <button
+                        key={text}
+                        type="button"
+                        className={`flex-shrink-0 px-[14px] h-[40px] rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${darkMode ? "bg-white/[0.12] text-gray-200" : "bg-black/[0.06] text-gray-700"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateInputText(text);
+                          setTextMode(true);
+                          handleTextSend();
+                        }}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div
                   className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : "backdrop-blur-[20px] backdrop-saturate-[1.8]"}`}
                   style={{

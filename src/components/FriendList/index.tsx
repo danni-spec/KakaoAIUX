@@ -79,7 +79,8 @@ function calcIncrementalAngle(
 export function FriendList() {
   const [gnbTab, setGnbTab] = useState(0); // 0: 친구, 1: 채팅, 2~4: 기타
   const chatRoomActions = useChatRooms();
-  const { activeChatRoomId } = chatRoomActions;
+  const { activeChatRoomId, chatRooms } = chatRoomActions;
+  const totalUnread = chatRooms.reduce((sum, r) => sum + r.unreadCount, 0);
   const [aiPopupOpen, setAiPopupOpen] = useState(false);
   const [darkModeOverlayOpen, setDarkModeOverlayOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
@@ -322,13 +323,14 @@ export function FriendList() {
         onClose={() => setNotificationOpen(false)}
       />
       {/* absolute 오버레이 → backdrop-blur 실효 */}
-      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} />
+      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} unreadCount={totalUnread} />
       <AILayerPopup
         isOpen={aiPopupOpen}
         onClose={() => setAiPopupOpen(false)}
         inputRef={aiInputRef}
         darkMode={darkMode}
         onDarkModeToggle={setDarkMode}
+        fromChatRoom={!!activeChatRoomId}
         onCreateChatRoom={(members, initialMessage) => {
           const { openDirectChat, createGroupChat, sendMessage } = chatRoomActions;
           let room;

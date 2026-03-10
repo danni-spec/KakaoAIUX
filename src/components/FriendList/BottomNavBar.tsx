@@ -36,14 +36,14 @@ const GLASS_SHADOW_DARK = [
 ].join(", ");
 
 const NAV_ITEMS = [
-  { active: true, badge: null, src: "/gnb-tab-1.png" },
-  { active: false, badge: "32", src: "/gnb-tab-2.png" },
-  { active: false, badge: null, src: "/gnb-tab-3.png" },
-  { active: false, badge: null, src: "/gnb-tab-4.png" },
-  { active: false, badge: null, src: "/gnb-tab-5.png" },
+  { src: "/gnb-tab-1.png" },
+  { src: "/gnb-tab-2.png", badgeIndex: 1 },
+  { src: "/gnb-tab-3.png" },
+  { src: "/gnb-tab-4.png" },
+  { src: "/gnb-tab-5.png" },
 ];
 
-export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange }: { darkMode?: boolean; activeTab?: number; onTabChange?: (tab: number) => void }) {
+export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unreadCount = 0 }: { darkMode?: boolean; activeTab?: number; onTabChange?: (tab: number) => void; unreadCount?: number }) {
   return (
     <nav
       className={[
@@ -63,15 +63,13 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange }: {
         }}
       />
 
-      <div className="relative flex flex-1 items-center justify-around px-2">
+      <div className="relative flex flex-1 items-center" style={{ padding: "0 7px" }}>
         {NAV_ITEMS.map((item, i) => {
           const isActive = i === activeTab;
           return (
             <button
               key={i}
-              className={`flex items-center justify-center rounded-2xl transition-colors active:bg-black/5 relative ${
-                isActive ? "w-[72px] h-12 -translate-x-1" : "w-12 h-12"
-              }`}
+              className="flex-1 flex items-center justify-center h-12 relative"
               onClick={() => onTabChange?.(i)}
             >
               {isActive && (
@@ -84,9 +82,9 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange }: {
                   alt=""
                   className={`w-[25px] h-[25px] object-contain ${darkMode ? "invert" : ""}`}
                 />
-                {item.badge && !isActive && (
+                {item.badgeIndex === 1 && unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] bg-red-500 text-white text-[9.5px] font-bold rounded-full flex items-center justify-center px-[3px] leading-none shadow-sm">
-                    {item.badge}
+                    {unreadCount}
                   </span>
                 )}
               </div>
