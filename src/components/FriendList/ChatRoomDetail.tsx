@@ -238,7 +238,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   return (
     <div
       ref={containerRef}
-      className={`absolute inset-x-0 top-0 z-50 flex flex-col max-w-[100vw] ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      className={`absolute inset-x-0 top-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
         height: viewportHeight ? `${viewportHeight}px` : "100dvh",
         paddingTop: "env(safe-area-inset-top)",

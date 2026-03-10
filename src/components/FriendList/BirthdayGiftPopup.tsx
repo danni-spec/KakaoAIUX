@@ -61,7 +61,7 @@ export function BirthdayGiftPopup({
 
       {/* Card */}
       <div
-        className={`absolute left-4 right-4 top-[100px] z-50 ${
+        className={`absolute left-4 right-4 top-[100px] z-50 overflow-hidden ${
           closing ? "animate-gift-card-exit" : "animate-gift-card-enter"
         }`}
       >

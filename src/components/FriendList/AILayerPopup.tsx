@@ -967,7 +967,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <>
       {/* ── AI 레이어 카드 (상하 여백 60px) ── */}
       <div
-        className="absolute left-4 right-4 transition-all duration-300"
+        className="absolute left-4 right-4 overflow-hidden transition-all duration-300"
         style={{
           top: (navActive || navArrived) ? 100 : undefined,
           bottom: isOpen ? (fromChatRoom ? 96 : 16) : -300,
@@ -1610,7 +1610,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               >
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
                 {!textMode && !choonsikCardView && !directionMode && !darkmodeView && !wishlistView && !summaryResult && !giftResult && !isLoading && !statusMessage && !transcript && !interimText && (
-                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-4 -mx-4 px-4">
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-4">
                     {(fromChatRoom ? CHAT_TAB_SUGGESTIONS : FRIEND_TAB_SUGGESTIONS).map((t) => t === "다크모드 켜줘" ? (darkMode ? "다크모드 꺼줘" : "다크모드 켜줘") : t).map((text) => (
                       <button
                         key={text}

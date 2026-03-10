@@ -8,7 +8,7 @@ function App() {
 
   return (
     <ChatRoomProvider>
-    <div className="w-full max-w-[100vw] overflow-hidden relative" style={{ height: "100dvh" }}>
+    <div className="w-full overflow-hidden relative" style={{ height: "100dvh" }}>
       <FriendList />
       {showWalkthrough && (
         <div
