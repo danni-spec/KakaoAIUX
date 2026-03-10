@@ -34,41 +34,18 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   const { activeChatRoom, closeChatRoom, sendMessage } = useChatRooms();
   const [text, setText] = useState("");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  // VisualViewport 대응: 키보드가 올라오면 컨테이너 높이를 실시간 조절
-  // body 스타일은 건드리지 않고 컨테이너만 제어
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const onViewportChange = () => {
-      setViewportHeight(vv.height);
-      setKeyboardOpen(vv.height < window.innerHeight * 0.75);
-
-      // iOS Safari에서 키보드로 인해 viewport가 스크롤되는 것을 보정
-      if (containerRef.current) {
-        containerRef.current.style.height = `${vv.height}px`;
-        containerRef.current.style.transform = `translateY(${vv.offsetTop}px)`;
-      }
-
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-      });
-    };
-
-    vv.addEventListener("resize", onViewportChange);
-    vv.addEventListener("scroll", onViewportChange);
-    onViewportChange();
-
-    return () => {
-      vv.removeEventListener("resize", onViewportChange);
-      vv.removeEventListener("scroll", onViewportChange);
-    };
+  // 키보드 감지 (포커스 기반 — VisualViewport 조작 없이)
+  const onInputFocus = useCallback(() => {
+    setKeyboardOpen(true);
+    // 메시지 맨 아래로
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    });
   }, []);
+  const onInputBlur = useCallback(() => setKeyboardOpen(false), []);
 
   // 원 제스처 (마우스)
   const circlePointsRef = useRef<{ x: number; y: number }[]>([]);
@@ -224,13 +201,9 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
 
   return (
     <div
-      ref={containerRef}
-      className={`fixed top-0 left-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      className={`absolute inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
-        width: "100%",
-        height: viewportHeight ? `${viewportHeight}px` : "100dvh",
         paddingTop: "env(safe-area-inset-top)",
-        overflow: "hidden",
       }}
     >
       <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
@@ -338,8 +311,10 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 handleSend();
               }
             }}
+            onFocus={onInputFocus}
+            onBlur={onInputBlur}
             placeholder="메시지 입력"
-            className={`flex-1 text-[15px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
+            className={`flex-1 outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
             style={{ fontSize: "16px" }}
           />
           <button type="button" className="flex-shrink-0 ml-[4px]">
