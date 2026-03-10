@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* 전역 리셋 */
+/* ━━━ 전역 리셋 ━━━ */
 *, *::before, *::after {
   box-sizing: border-box;
   -webkit-user-select: none;
@@ -8,7 +8,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html, body, #root {
+/* ━━━ 뷰포트 잠금: html → body → #root 체인 전부 100% 고정 ━━━ */
+html {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -16,14 +17,20 @@ html, body, #root {
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
+  /* 더블탭/핀치 줌 방지 */
   touch-action: manipulation;
 }
 
-html {
-  min-height: 100dvh;
-}
-
 body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* iOS bounce 방어 */
+  position: fixed;
+  inset: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -31,10 +38,13 @@ body {
 }
 
 #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   position: relative;
 }
 
-/* iOS Safari 자동 줌 방지: input 16px 미만이면 줌됨 */
+/* ━━━ iOS auto-zoom 방지: 16px 미만 input → 자동 확대 → 가로 넘침 ━━━ */
 input, textarea, select {
   font-size: 16px !important;
   -webkit-user-select: text;

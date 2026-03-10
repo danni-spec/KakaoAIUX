@@ -281,7 +281,7 @@ export function FriendList() {
 
   return (
     <div
-      className={`h-full w-full overflow-x-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
+      className={`h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
@@ -295,7 +295,7 @@ export function FriendList() {
       <div
         ref={mainRef as React.RefObject<HTMLDivElement>}
         className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
-        style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch", willChange: "scroll-position" }}
+        style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

@@ -241,7 +241,8 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
       {/* 메시지 영역 */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto scrollbar-hide px-[10px] py-3"
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide px-[10px] py-3"
+        style={{ overscrollBehavior: "contain" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
