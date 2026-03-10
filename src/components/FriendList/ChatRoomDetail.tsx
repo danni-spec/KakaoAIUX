@@ -34,8 +34,54 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   const { activeChatRoom, closeChatRoom, sendMessage } = useChatRooms();
   const [text, setText] = useState("");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // VisualViewport 대응: 키보드가 올라오면 컨테이너 높이를 실시간 조절
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onResize = () => {
+      setViewportHeight(vv.height);
+      const isKb = vv.height < window.innerHeight * 0.75;
+      setKeyboardOpen(isKb);
+
+      // 키보드 올라왔을 때 body 스크롤 방지
+      if (isKb) {
+        document.body.style.position = "fixed";
+        document.body.style.width = "100%";
+        document.body.style.height = `${vv.height}px`;
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.position = "";
+        document.body.style.width = "";
+        document.body.style.height = "";
+        document.body.style.overflow = "";
+      }
+
+      // 메시지 영역 맨 아래로 스크롤
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+      });
+    };
+
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    onResize();
+
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+      // cleanup body styles
+      document.body.style.position = "";
+      document.body.style.width = "";
+      document.body.style.height = "";
+      document.body.style.overflow = "";
+    };
+  }, []);
 
   // 원 제스처 (마우스)
   const circlePointsRef = useRef<{ x: number; y: number }[]>([]);
@@ -190,8 +236,14 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   };
 
   return (
-    <div className={`absolute inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
-      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+    <div
+      ref={containerRef}
+      className={`absolute inset-x-0 top-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      style={{
+        height: viewportHeight ? `${viewportHeight}px` : "100dvh",
+        paddingTop: "env(safe-area-inset-top)",
+        overflow: "hidden",
+      }}
     >
       <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
       {/* 헤더 */}
@@ -298,8 +350,8 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 handleSend();
               }
             }}
-            onFocus={() => setKeyboardOpen(true)}
-            onBlur={() => setKeyboardOpen(false)}
+            onFocus={() => { /* VisualViewport에서 키보드 감지 */ }}
+            onBlur={() => { /* VisualViewport에서 키보드 감지 */ }}
             placeholder="메시지 입력"
             className={`flex-1 text-[15px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
             style={{ fontSize: "15px" }}
