@@ -281,7 +281,7 @@ export function FriendList() {
 
   return (
     <div
-      className={`h-full flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
+      className={`h-full w-full max-w-[100vw] overflow-x-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
