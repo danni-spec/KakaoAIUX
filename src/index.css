@@ -53,6 +53,18 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* iOS Safari 자동 줌 방지: input/textarea/select는 16px 이상 필수 */
+input, textarea, select {
+  font-size: 16px !important;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 터치 줌 방지 */
+html {
+  touch-action: manipulation;
+}
+
 img, svg {
   -webkit-user-drag: none;
 }

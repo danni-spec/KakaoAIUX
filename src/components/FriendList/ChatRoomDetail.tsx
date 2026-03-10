@@ -40,46 +40,33 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   const containerRef = useRef<HTMLDivElement>(null);
 
   // VisualViewport 대응: 키보드가 올라오면 컨테이너 높이를 실시간 조절
+  // body 스타일은 건드리지 않고 컨테이너만 제어
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const onResize = () => {
+    const onViewportChange = () => {
       setViewportHeight(vv.height);
-      const isKb = vv.height < window.innerHeight * 0.75;
-      setKeyboardOpen(isKb);
+      setKeyboardOpen(vv.height < window.innerHeight * 0.75);
 
-      // 키보드 올라왔을 때 body 스크롤 방지
-      if (isKb) {
-        document.body.style.position = "fixed";
-        document.body.style.width = "100%";
-        document.body.style.height = `${vv.height}px`;
-        document.body.style.overflow = "hidden";
-      } else {
-        document.body.style.position = "";
-        document.body.style.width = "";
-        document.body.style.height = "";
-        document.body.style.overflow = "";
+      // iOS Safari에서 키보드로 인해 viewport가 스크롤되는 것을 보정
+      if (containerRef.current) {
+        containerRef.current.style.height = `${vv.height}px`;
+        containerRef.current.style.transform = `translateY(${vv.offsetTop}px)`;
       }
 
-      // 메시지 영역 맨 아래로 스크롤
       requestAnimationFrame(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
       });
     };
 
-    vv.addEventListener("resize", onResize);
-    vv.addEventListener("scroll", onResize);
-    onResize();
+    vv.addEventListener("resize", onViewportChange);
+    vv.addEventListener("scroll", onViewportChange);
+    onViewportChange();
 
     return () => {
-      vv.removeEventListener("resize", onResize);
-      vv.removeEventListener("scroll", onResize);
-      // cleanup body styles
-      document.body.style.position = "";
-      document.body.style.width = "";
-      document.body.style.height = "";
-      document.body.style.overflow = "";
+      vv.removeEventListener("resize", onViewportChange);
+      vv.removeEventListener("scroll", onViewportChange);
     };
   }, []);
 
@@ -238,8 +225,9 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   return (
     <div
       ref={containerRef}
-      className={`absolute inset-x-0 top-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      className={`fixed top-0 left-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
+        width: "100%",
         height: viewportHeight ? `${viewportHeight}px` : "100dvh",
         paddingTop: "env(safe-area-inset-top)",
         overflow: "hidden",
@@ -350,11 +338,9 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 handleSend();
               }
             }}
-            onFocus={() => { /* VisualViewport에서 키보드 감지 */ }}
-            onBlur={() => { /* VisualViewport에서 키보드 감지 */ }}
             placeholder="메시지 입력"
             className={`flex-1 text-[15px] outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
-            style={{ fontSize: "15px" }}
+            style={{ fontSize: "16px" }}
           />
           <button type="button" className="flex-shrink-0 ml-[4px]">
             <img src="/emojiIcon.svg" alt="이모티콘" className={`w-[23px] h-[23px] ${darkMode ? "invert" : ""}`} />
