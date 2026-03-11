@@ -141,7 +141,12 @@ export function ChatRoomList({ darkMode }: { darkMode: boolean }) {
             {/* 텍스트 */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <p className={`text-[15px] font-semibold truncate ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                <p className={`text-[15px] font-semibold truncate flex items-center gap-1.5 ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                  {room.id === "room-my" && (
+                    <span className="flex-shrink-0 w-[15px] h-[15px] rounded-full bg-black text-white flex items-center justify-center">
+                      <span className="badge-na">나</span>
+                    </span>
+                  )}
                   {room.name}
                   {room.members.length > 1 && (
                     <span className="text-[15px] font-semibold ml-1 text-[#6c6c6c]">

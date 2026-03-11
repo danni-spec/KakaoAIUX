@@ -4,7 +4,7 @@ const UPDATED_FRIENDS = [
   { name: "카나나알림", hasUpdate: true, isAd: false, photo: "/voice-effect.png" },
   { name: "김영지", hasUpdate: false, isAd: false, photo: "/profile-yerin.png" },
   { name: "이해수 ❤️", hasUpdate: false, isAd: false, photo: "/profile-jieun.png" },
-  { name: "Hermes", hasUpdate: true, isAd: true, photo: "/hermes.png" },
+  { name: "Hermes", hasUpdate: true, isAd: true, photo: "/hermes.png?v=2" },
   { name: "강지훈", hasUpdate: false, isAd: false, photo: "/profile-junhyuk.png" },
   { name: "고성현", hasUpdate: false, isAd: false, photo: "/profile-geonho.png" },
   { name: "박채원", hasUpdate: false, isAd: false, photo: "/profile-chaewon.png" },
@@ -23,7 +23,7 @@ export function UpdatedFriendsSection({ darkMode = false, onFriendClick }: Updat
   return (
     <section className="mb-5 pt-1">
       <h2 className="text-[13px] font-medium text-gray-400 px-4 mb-3">
-        업데이트한 친구 {UPDATED_FRIENDS.length}
+        친구의 새소식 {UPDATED_FRIENDS.length}
       </h2>
       <div className="flex gap-3 overflow-x-auto px-4 pt-2 pb-1 scrollbar-hide">
         {UPDATED_FRIENDS.map((friend) => (

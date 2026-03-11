@@ -4,6 +4,45 @@ import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
 import { StatusBar } from "./StatusBar";
 
+/** 링키파이 대상 키워드 */
+const LINKIFY_KEYWORDS = ["에르메스 립밤", "성수동 뚜흐느솔로", "어디쯤이야?"] as const;
+
+function parseLinkifyText(text: string): { type: "text" | "link"; value: string }[] {
+  const segments: { type: "text" | "link"; value: string }[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    let earliestMatch: { keyword: string; index: number } | null = null;
+
+    for (const kw of LINKIFY_KEYWORDS) {
+      const idx = remaining.indexOf(kw);
+      if (idx !== -1 && (earliestMatch === null || idx < earliestMatch.index)) {
+        earliestMatch = { keyword: kw, index: idx };
+      }
+    }
+
+    if (earliestMatch === null) {
+      remaining && segments.push({ type: "text", value: remaining });
+      break;
+    }
+
+    if (earliestMatch.index > 0) {
+      segments.push({ type: "text", value: remaining.slice(0, earliestMatch.index) });
+    }
+    segments.push({ type: "link", value: earliestMatch.keyword });
+    remaining = remaining.slice(earliestMatch.index + earliestMatch.keyword.length);
+  }
+
+  return segments;
+}
+
+function LinkifyText({ text, onLinkClick }: { text: string; onLinkClick: (keyword: string) => void }) {
+  const segments = parseLinkifyText(text);
+  const [tapped, setTapped] = useState<Set<number>>(() => new Set());
+  if (segments.length === 1 && segments[0].type === "text") return <>{text}</>;
+  return (<>{segments.map((seg, i) => seg.type === "link" ? (tapped.has(i) ? <span key={i}>{seg.value}</span> : <span key={i} role="button" tabIndex={0} className="cursor-pointer active:opacity-80 animate-pink-flow" style={{ background: "linear-gradient(90deg, #E83070, #E83070 40%, #FFD700 48%, #FFD700 52%, #E83070 60%, #E83070)", backgroundSize: "200% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", whiteSpace: "nowrap" }} onClick={(e) => { e.stopPropagation(); setTapped((prev) => new Set(prev).add(i)); onLinkClick(seg.value); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTapped((prev) => new Set(prev).add(i)); onLinkClick(seg.value); } }}>{seg.value}</span>) : <span key={i}>{seg.value}</span>)}</>);
+}
+
 function formatMessageTime(ts: number): string {
   const d = new Date(ts);
   const h = d.getHours();
@@ -30,10 +69,29 @@ function calcIncrementalAngle(
   return prevAngle + delta;
 }
 
+// ── 상품 데이터 ──
+const PRODUCT_DATA = {
+  name: "에르메스 로즈 립밤",
+  brand: "HERMÈS",
+  image: "/hermes-lipbalm.png?v=2",
+  prices: [
+    { store: "카카오쇼핑", price: 52000, url: "#", icon: "/kakaoshopping-icon.png" },
+    { store: "네이버", price: 54000, url: "#", icon: "/naver-icon.jpg" },
+    { store: "쿠팡", price: 55800, url: "#", icon: "/coupang-icon.svg" },
+  ],
+  gifts: [
+    { label: "선물 포장", desc: "카카오 선물하기로 바로 전달", price: 52000 },
+    { label: "기프트 카드 동봉", desc: "메시지 카드와 함께 배송", price: 54000 },
+  ],
+};
+
 export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOpenAI?: () => void }) {
   const { activeChatRoom, closeChatRoom, sendMessage } = useChatRooms();
   const [text, setText] = useState("");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [productPopup, setProductPopup] = useState(false);
+  const [productTab, setProductTab] = useState<"price" | "gift">("price");
+  const [placePopup, setPlacePopup] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -284,7 +342,10 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                     }`}
                     style={{ borderRadius: CHAT_BUBBLE_RADIUS }}
                   >
-                    {msg.text}
+                    <LinkifyText text={msg.text} onLinkClick={(kw) => {
+                      if (kw.includes("뚜흐느솔로")) setPlacePopup(true);
+                      else if (kw.includes("에르메스")) setProductPopup(true);
+                    }} />
                   </div>
                   <span className={`text-[10px] flex-shrink-0 ${darkMode ? "text-gray-500" : "text-black/60"}`}>
                     {formatMessageTime(msg.timestamp)}
@@ -345,6 +406,185 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
         <div className={`flex-shrink-0 flex items-end justify-center pb-2 pt-[12px] ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
           <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
         </div>
+      )}
+
+      {/* ── 상품 레이어 팝업 ── */}
+      {productPopup && (
+        <>
+          {/* 투명 배경 터치 영역 */}
+          <div
+            className="absolute inset-0 z-[60]"
+            onClick={() => setProductPopup(false)}
+          />
+          {/* 팝업 외곽 래퍼: bottom 포지셔닝 (transform 미사용 → backdrop-filter 보존) */}
+          <div
+            className="absolute z-[61]"
+            style={{
+              left: 16,
+              right: 16,
+              bottom: 16,
+              transition: "bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease",
+            }}
+          >
+            <div className="relative">
+              {/* 핑크 그라디언트 글로우 */}
+              <div
+                className="absolute inset-[-8px] rounded-[32px] overflow-hidden pointer-events-none animate-glow-breathe"
+                style={{ zIndex: 0 }}
+              >
+                <div
+                  className="absolute inset-[-100%] animate-gradient-spin"
+                  style={{
+                    background:
+                      "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)",
+                  }}
+                />
+              </div>
+              {/* 카드 본체 */}
+              <div
+                className={`relative rounded-[30px] overflow-hidden ai-layer-blur ${darkMode ? "dark" : ""}`}
+                style={{
+                  zIndex: 1,
+                  boxShadow: darkMode
+                    ? "inset 0 0 0 1px rgba(255,255,255,0.12)"
+                    : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
+                }}
+              >
+            {/* 상품 이미지 + 정보 */}
+            <div className="flex items-center gap-4 px-5 pt-5 pb-4">
+              <div className="w-[80px] h-[80px] rounded-[12px] overflow-hidden flex-shrink-0">
+                <img src="/hermes-lipbalm.png" alt="에르메스 립밤" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[11px] font-semibold tracking-wide ${darkMode ? "text-gray-400" : "text-gray-400"}`}>
+                  {PRODUCT_DATA.brand}
+                </p>
+                <p className={`text-[17px] font-bold mt-0.5 leading-snug ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                  {PRODUCT_DATA.name}
+                </p>
+              </div>
+            </div>
+
+            {/* 추천 이유 */}
+            <div className={`flex items-start gap-2 px-5 pb-4 text-[13px] leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-700"}`}>
+              <img src="/voice-effect.png" alt="어시스턴트" className="w-[32px] h-[32px] rounded-full flex-shrink-0 mt-0.5 animate-flip-y" />
+              <span>대화에서 언급된 에르메스 립밤이에요. 시어버터 베이스로 촉촉하게 밀착되고, 은은한 로즈 컬러가 자연스러운 혈색을 만들어줘요.</span>
+            </div>
+
+            {/* 최저가 타이틀 */}
+            <p className={`px-5 pb-2 text-[13px] font-semibold ${darkMode ? "text-gray-300" : "text-[#191919]"}`}>최저가</p>
+
+            {/* 최저가 리스트 */}
+            <div className="px-2 pb-5">
+              <div className="flex flex-col divide-y divide-white">
+                {PRODUCT_DATA.prices.map((p) => (
+                  <div
+                    key={p.store}
+                    className="flex items-center justify-between px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img src={p.icon} alt={p.store} className="w-[24px] h-[24px] rounded-full object-cover" />
+                      <span className={`text-[14px] font-medium ${darkMode ? "text-gray-200" : "text-[#191919]"}`}>
+                        {p.store}
+                      </span>
+                    </div>
+                    <span className={`text-[15px] font-bold ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                      {p.price.toLocaleString()}원
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 플레이스 정보 팝업 ── */}
+      {placePopup && (
+        <>
+          <div
+            className="absolute inset-0 z-[60]"
+            onClick={() => setPlacePopup(false)}
+          />
+          <div
+            className="absolute z-[61]"
+            style={{
+              left: 16,
+              right: 16,
+              bottom: 16,
+              transition: "bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease",
+            }}
+          >
+            <div className="relative">
+              <div
+                className="absolute inset-[-8px] rounded-[32px] overflow-hidden pointer-events-none animate-glow-breathe"
+                style={{ zIndex: 0 }}
+              >
+                <div
+                  className="absolute inset-[-100%] animate-gradient-spin"
+                  style={{
+                    background:
+                      "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)",
+                  }}
+                />
+              </div>
+              <div
+                className={`relative rounded-[30px] overflow-hidden ai-layer-blur ${darkMode ? "dark" : ""}`}
+                style={{
+                  zIndex: 1,
+                  boxShadow: darkMode
+                    ? "inset 0 0 0 1px rgba(255,255,255,0.12)"
+                    : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
+                }}
+              >
+                {/* 플레이스 이미지 */}
+                <div className="w-full h-[140px] overflow-hidden">
+                  <img src="/cafe-exterior.svg" alt="뚜흐느솔로" className="w-full h-full object-cover" />
+                </div>
+
+                {/* 플레이스 정보 */}
+                <div className="px-5 pt-4 pb-3">
+                  <p className={`text-[18px] font-bold leading-tight ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                    뚜흐느솔로
+                  </p>
+                  <p className={`text-[13px] mt-1 ${darkMode ? "text-gray-400" : "text-[#767676]"}`}>
+                    카페 · 성수동2가
+                  </p>
+                  <div className="flex items-center gap-1 mt-1.5">
+                    <span className="text-[13px] font-semibold text-[#FFB800]">★ 4.7</span>
+                    <span className={`text-[12px] ${darkMode ? "text-gray-500" : "text-[#999]"}`}>리뷰 328</span>
+                  </div>
+                </div>
+
+                {/* 추천 사유 */}
+                <div className={`flex items-start gap-2 px-5 pb-4 text-[13px] leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-700"}`}>
+                  <img src="/voice-effect.png" alt="어시스턴트" className="w-[32px] h-[32px] rounded-full flex-shrink-0 mt-0.5 animate-flip-y" />
+                  <span>서은재님과 오늘 3시에 약속한 카페예요. 성수역 3번 출구에서 도보 5분 거리에 있어요.</span>
+                </div>
+
+                {/* 버튼 */}
+                <div className="flex px-5 gap-2 pb-5">
+                  <button
+                    type="button"
+                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white text-black" : "bg-[#191919] text-white"}`}
+                    onClick={() => setPlacePopup(false)}
+                  >
+                    길찾기
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-white text-[#191919]"}`}
+                    onClick={() => setPlacePopup(false)}
+                  >
+                    공유하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

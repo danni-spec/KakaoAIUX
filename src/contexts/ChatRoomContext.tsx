@@ -34,6 +34,8 @@ interface ChatRoomContextType {
   closeChatRoom: () => void;
   /** 메시지 전송 */
   sendMessage: (roomId: string, text: string) => void;
+  /** 전체 읽음 처리 */
+  markAllRead: () => void;
   /** 활성 채팅방 데이터 */
   activeChatRoom: ChatRoom | null;
 }
@@ -47,6 +49,17 @@ function genId() {
 
 // ── 초기 채팅방 (데모) ──
 const INITIAL_ROOMS: ChatRoom[] = [
+  {
+    id: "room-my",
+    name: "나와의 채팅방",
+    members: [{ name: "나", photo: "/profile-dannion.png" }],
+    lastMessage: "나에게 보낸 메모를 여기에 저장해 보세요",
+    lastTimestamp: Date.now() - 1000 * 60 * 60 * 24,
+    unreadCount: 0,
+    messages: [
+      { id: "m0", sender: "me", text: "나에게 보낸 메모를 여기에 저장해 보세요", timestamp: Date.now() - 1000 * 60 * 60 * 24 },
+    ],
+  },
   {
     id: "room-init-1",
     name: "이해수",
@@ -85,22 +98,34 @@ const INITIAL_ROOMS: ChatRoom[] = [
     id: "room-init-3",
     name: "박채원",
     members: [{ name: "박채원", photo: "/profile-chaewon.png" }],
-    lastMessage: "사진 보내줘~",
-    lastTimestamp: Date.now() - 1000 * 60 * 60 * 3,
+    lastMessage: "에르메스 립밤 어때?",
+    lastTimestamp: Date.now() - 1000 * 60 * 25,
     unreadCount: 1,
     messages: [
-      { id: "m8", sender: "박채원", text: "어제 찍은 사진 보내줘~", timestamp: Date.now() - 1000 * 60 * 60 * 3 },
+      { id: "m8", sender: "박채원", text: "루이비통 신상 가방 봤어? 이번 시즌 컬러 진짜 예쁘다", timestamp: Date.now() - 1000 * 60 * 60 * 2 },
+      { id: "m9", sender: "me", text: "응! 근데 가격이 좀 부담스러워 ㅠ", timestamp: Date.now() - 1000 * 60 * 60 * 1.9 },
+      { id: "m10", sender: "박채원", text: "그래서 나는 샤넬 립스틱으로 선물 받기로 했어 ㅋㅋ", timestamp: Date.now() - 1000 * 60 * 60 * 1.8 },
+      { id: "m11", sender: "me", text: "오 좋다! 디올 립글로우랑 비교해봤어?", timestamp: Date.now() - 1000 * 60 * 60 * 1.7 },
+      { id: "m12", sender: "박채원", text: "디올은 색이 더 촉촉한 느낌이고 샤넬은 발색이 진해", timestamp: Date.now() - 1000 * 60 * 45 },
+      { id: "m13", sender: "박채원", text: "에르메스 립밤 어때? 요즘 많이 쓰는 것 같아", timestamp: Date.now() - 1000 * 60 * 25 },
     ],
   },
   {
     id: "room-init-4",
     name: "서은재",
     members: [{ name: "서은재", photo: "/profile-emma.png" }],
-    lastMessage: "여행 일정 공유해줄게!",
-    lastTimestamp: Date.now() - 1000 * 60 * 60 * 5,
-    unreadCount: 0,
+    lastMessage: "응 거의 다 왔어! 5분이면 도착해~",
+    lastTimestamp: Date.now() - 1000 * 60 * 3,
+    unreadCount: 2,
     messages: [
-      { id: "m9", sender: "서은재", text: "여행 일정 공유해줄게!", timestamp: Date.now() - 1000 * 60 * 60 * 5 },
+      { id: "m9a", sender: "me", text: "오늘 카페 3시 맞지?", timestamp: Date.now() - 1000 * 60 * 45 },
+      { id: "m9b", sender: "서은재", text: "응 맞아! 성수동 뚜흐느솔로", timestamp: Date.now() - 1000 * 60 * 40 },
+      { id: "m9c", sender: "me", text: "오케이 나 지금 출발했어~", timestamp: Date.now() - 1000 * 60 * 30 },
+      { id: "m9d", sender: "서은재", text: "나도 지금 나가는 중! 어디쯤이야?", timestamp: Date.now() - 1000 * 60 * 20 },
+      { id: "m9e", sender: "me", text: "지하철 탔어 한 30분 남은 것 같아", timestamp: Date.now() - 1000 * 60 * 15 },
+      { id: "m9f", sender: "서은재", text: "ㅋㅋ 나도 비슷해 도착하면 연락해!", timestamp: Date.now() - 1000 * 60 * 10 },
+      { id: "m9g", sender: "me", text: "오고 있어? 나 거의 다 왔는데!", timestamp: Date.now() - 1000 * 60 * 5 },
+      { id: "m9h", sender: "서은재", text: "응 거의 다 왔어! 5분이면 도착해~", timestamp: Date.now() - 1000 * 60 * 3 },
     ],
   },
   {
@@ -131,15 +156,20 @@ const INITIAL_ROOMS: ChatRoom[] = [
       { name: "박채원", photo: "/profile-chaewon.png" },
       { name: "서은재", photo: "/profile-emma.png" },
     ],
-    lastMessage: "고마워 바로 송금 할게!",
-    lastTimestamp: Date.now() - 1000 * 60 * 60,
-    unreadCount: 1,
+    lastMessage: "그래서 어디로 할까?",
+    lastTimestamp: Date.now() - 1000 * 60 * 3,
+    unreadCount: 3,
     messages: [
-      { id: "m15", sender: "김민수", text: "어제 회식 비용 정산할게요", timestamp: Date.now() - 1000 * 60 * 90 },
-      { id: "m16", sender: "강지훈", text: "1인당 25,000원이에요", timestamp: Date.now() - 1000 * 60 * 85 },
-      { id: "m17", sender: "박채원", text: "넵 확인했어요!", timestamp: Date.now() - 1000 * 60 * 80 },
-      { id: "m18", sender: "me", text: "고마워 바로 송금 할게!", timestamp: Date.now() - 1000 * 60 * 75 },
-      { id: "m19", sender: "서은재", text: "저도 보냈어요~", timestamp: Date.now() - 1000 * 60 * 60 },
+      { id: "m15", sender: "김민수", text: "이번 주 토요일 동기 모임 장소 정해야 하는데 의견 있어?", timestamp: Date.now() - 1000 * 60 * 30 },
+      { id: "m16", sender: "강지훈", text: "성수동 어때? 요즘 핫한데도 많고", timestamp: Date.now() - 1000 * 60 * 28 },
+      { id: "m17", sender: "박채원", text: "성수 좋긴 한데 주말에 사람 너무 많지 않아? 웨이팅 1시간은 기본이던데", timestamp: Date.now() - 1000 * 60 * 25 },
+      { id: "m18", sender: "서은재", text: "나는 을지로 분위기 있는 데 가고 싶어. 근데 강지훈이 말한 성수도 괜찮고", timestamp: Date.now() - 1000 * 60 * 22 },
+      { id: "m19", sender: "김민수", text: "을지로도 주말에 붐비긴 마찬가지 아닌가? 차라리 한남동은?", timestamp: Date.now() - 1000 * 60 * 18 },
+      { id: "m20", sender: "강지훈", text: "한남동은 가격대가 좀... 부담스럽지 않아?", timestamp: Date.now() - 1000 * 60 * 15 },
+      { id: "m21", sender: "박채원", text: "맞아 한남동은 인당 5만원은 나올 듯", timestamp: Date.now() - 1000 * 60 * 12 },
+      { id: "m22", sender: "서은재", text: "예산은 인당 3만원 정도로 하자고 했잖아", timestamp: Date.now() - 1000 * 60 * 8 },
+      { id: "m23", sender: "김민수", text: "그러면 성수 vs 을지로 중에 골라야 하는데", timestamp: Date.now() - 1000 * 60 * 5 },
+      { id: "m24", sender: "강지훈", text: "그래서 어디로 할까?", timestamp: Date.now() - 1000 * 60 * 3 },
     ],
   },
 ];
@@ -267,7 +297,9 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
       ),
     );
 
-    // 시뮬레이션: 1~2초 후 상대방 자동 응답
+    // 시뮬레이션: 1~2초 후 상대방 자동 응답 (나와의 채팅방 제외)
+    if (roomId === "room-my") return;
+
     setTimeout(() => {
       setChatRooms((prev) => {
         const room = prev.find((r) => r.id === roomId);
@@ -298,6 +330,10 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
     }, 1000 + Math.random() * 1500);
   }, []);
 
+  const markAllRead = useCallback(() => {
+    setChatRooms((prev) => prev.map((r) => ({ ...r, unreadCount: 0 })));
+  }, []);
+
   // activeChatRoom: 리스트 또는 pending 방에서 찾기
   const activeChatRoom =
     chatRooms.find((r) => r.id === activeChatRoomId)
@@ -313,6 +349,7 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
         openChatRoom,
         closeChatRoom,
         sendMessage,
+        markAllRead,
         activeChatRoom,
       }}
     >

@@ -5,6 +5,7 @@ import { Header } from "./Header";
 import { TabNavigation } from "./TabNavigation";
 import { UpdatedFriendsSection } from "./UpdatedFriendsSection";
 import { BirthdayFriendsSection } from "./BirthdayFriendsSection";
+import { AIFriendsSection } from "./AIFriendsSection";
 import { FavoriteFriendsSection } from "./FavoriteFriendsSection";
 import { AllFriendsSection } from "./AllFriendsSection";
 import { BottomNavBar } from "./BottomNavBar";
@@ -95,6 +96,7 @@ export function FriendList() {
     document.body.classList.toggle("dark-mode", darkMode);
   }, [darkMode]);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [showNotificationList, setShowNotificationList] = useState(false);
   const [mapLayerOpen, setMapLayerOpen] = useState(false);
   const mapDestination = "";
   const [giftPopupOpen, setGiftPopupOpen] = useState(false);
@@ -342,6 +344,14 @@ export function FriendList() {
             </div>
             <UpdatedFriendsSection darkMode={darkMode} onFriendClick={handleFriendClick} />
             <BirthdayFriendsSection darkMode={darkMode} />
+            <AIFriendsSection
+              darkMode={darkMode}
+              onOpenAI={openAIPopup}
+              onNotificationClick={() => {
+                setShowNotificationList(true);
+                openAIPopup();
+              }}
+            />
             <FavoriteFriendsSection darkMode={darkMode} />
             <AllFriendsSection darkMode={darkMode} />
           </div>
@@ -359,7 +369,10 @@ export function FriendList() {
       <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} unreadCount={totalUnread} />
       <AILayerPopup
         isOpen={aiPopupOpen}
-        onClose={() => setAiPopupOpen(false)}
+        onClose={() => {
+          setAiPopupOpen(false);
+          setShowNotificationList(false);
+        }}
         inputRef={aiInputRef}
         darkMode={darkMode}
         onDarkModeToggle={setDarkMode}
@@ -371,6 +384,17 @@ export function FriendList() {
               : "friend"
         }
         chatPartnerName={activeChatRoom?.members.length === 1 ? activeChatRoom.members[0].name : undefined}
+        chatProductSuggestions={
+          activeChatRoom?.name === "박채원"
+            ? ["에르메스 립밤", "샤넬 립스틱", "디올 립글로우"]
+            : undefined
+        }
+        chatRoomMessages={activeChatRoom?.messages.map(m => ({ sender: m.sender, text: m.text }))}
+        onSendReply={activeChatRoomId ? (text) => chatRoomActions.sendMessage(activeChatRoomId, text) : undefined}
+        allChatRooms={chatRoomActions.chatRooms.map(r => ({ name: r.name, unreadCount: r.unreadCount, lastMessage: r.lastMessage }))}
+        onMarkAllRead={chatRoomActions.markAllRead}
+        showNotificationList={showNotificationList}
+        onNotificationListClose={() => setShowNotificationList(false)}
         onCreateChatRoom={(members, initialMessage) => {
           const { openDirectChat, createGroupChat, sendMessage } = chatRoomActions;
           let room;

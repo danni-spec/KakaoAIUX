@@ -64,7 +64,22 @@ img, svg {
   background: transparent;
 }
 
+/* AI 레이어 팝업 배경: @layer 밖에 두어 우선 적용, 블러 + 배경 80% */
+.ai-layer-blur {
+  -webkit-backdrop-filter: blur(4px) !important;
+  backdrop-filter: blur(4px) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+.ai-layer-blur.dark {
+  background-color: rgba(44, 44, 46, 0.92) !important;
+}
+
 @layer utilities {
+  .badge-na {
+    font-size: 9px;
+    font-weight: 700 !important;
+    line-height: 1;
+  }
   .leading-ai-reply {
     line-height: 1.65 !important;
   }
@@ -243,15 +258,40 @@ img, svg {
   animation: phase-fade-in 0.3s ease-out forwards;
 }
 
-/* ── 카나나 Y축 회전 (1.5초 1바퀴 천천히 + 5초 정지 = 6.5초 주기) ── */
+/* ── 카나나 Y축 회전 (2초 1바퀴) ── */
 @keyframes flip-y {
   0%    { transform: rotateY(0deg); }
-  23.1% { transform: rotateY(360deg); }
   100%  { transform: rotateY(360deg); }
 }
 
 .animate-flip-y {
-  animation: flip-y 6.5s ease-in-out infinite;
+  animation: flip-y 2s ease-in-out infinite;
+}
+
+/* ── 알림 리스트 진입 애니메이션 ── */
+@keyframes noti-fade-in {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 음성녹음/회의 모드 페이드 인 ── */
+@keyframes meeting-fade-in {
+  0%   { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-meeting-fade-in {
+  animation: meeting-fade-in 0.5s ease-out forwards;
+}
+
+/* ── 핑크 그라디언트 흐르는 텍스트 ── */
+@keyframes pink-flow {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: -200% 50%; }
+}
+
+.animate-pink-flow {
+  animation: pink-flow 1.5s linear infinite;
 }
 
 /* ── AI 타이핑 인디케이터 점 애니메이션 ── */

@@ -3,6 +3,7 @@ import { SquircleAvatar } from "./SquircleAvatar";
 interface AIFriendsSectionProps {
   darkMode?: boolean;
   onOpenAI?: () => void;
+  onNotificationClick?: () => void;
 }
 
 const AI_FRIENDS = [
@@ -11,7 +12,7 @@ const AI_FRIENDS = [
   { name: "ChatGPT for Kakao", subtitle: "AI 대화", photo: "/chatgpt.png", opensAILayer: false },
 ];
 
-export function AIFriendsSection({ darkMode = false, onOpenAI }: AIFriendsSectionProps) {
+export function AIFriendsSection({ darkMode = false, onOpenAI, onNotificationClick }: AIFriendsSectionProps) {
   return (
     <section className="mb-5">
       <h2 className="text-[13px] font-medium text-gray-400 px-4 mb-3">
@@ -45,6 +46,24 @@ export function AIFriendsSection({ darkMode = false, onOpenAI }: AIFriendsSectio
                 {friend.subtitle}
               </p>
             </div>
+            {friend.name === "카나나 어시스턴트" && (
+              <button
+                type="button"
+                className="relative flex-shrink-0 self-stretch flex items-center px-2 border-0 bg-transparent cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNotificationClick?.();
+                }}
+                aria-label="알림"
+              >
+                <img
+                  src="/bell-icon.png"
+                  alt=""
+                  className="w-8 h-8 object-contain"
+                />
+                <span className="absolute top-[6px] right-[2px] w-[4px] h-[4px] rounded-full bg-[#FF3B30]" />
+              </button>
+            )}
           </div>
         ))}
       </div>

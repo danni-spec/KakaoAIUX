@@ -38,7 +38,7 @@ const AI_RESPONSES = [
   "맞아요, 그렇게 하시면 됩니다.",
 ];
 
-async function getAIResponse(userMessage: string, _history: ChatMessage[]): Promise<string> {
+async function getAIResponse(userMessage: string, _history: ChatMessage[], chatRoomMessages?: { sender: string; text: string }[]): Promise<string> {
   // 시뮬레이션: 1초 딜레이 후 랜덤 응답
   await new Promise((r) => setTimeout(r, 1000));
 
@@ -56,11 +56,76 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[]): Prom
   if (lower.includes("고마워") || lower.includes("감사")) {
     return "천만에요! 또 필요한 게 있으면 언제든 말씀해주세요 :)";
   }
+  if (lower.includes("읽음처리") || lower.includes("읽음 처리")) {
+    return "안읽은 메시지를 모두 읽음 처리했어요! 총 4개의 채팅방에서 12개의 메시지가 읽음 처리되었습니다.";
+  }
   if (lower.includes("대화 요약") || lower.includes("메시지 요약") || lower.includes("요약해")) {
-    return "오늘 저녁 7시에 판교에서 만나기로 함. 판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함. 해수가 회사 일이 늦게 끝나서 판교역 대신 사무실 앞으로 픽업하기로 함.";
+    if (chatRoomMessages && chatRoomMessages.length > 0) {
+      return generateChatSummary(chatRoomMessages);
+    }
+    // chat-list 맥락: 전체 채팅방 요약
+    return "📌 이해수 — 오늘 저녁 7시 판교 약속, 픽업 장소 변경됨\n📌 박채원 — 에르메스 립밤 추천, 샤넬 vs 디올 비교 중\n📌 서은재 — 성수동 카페 뚜흐느솔로 3시 약속\n📌 신입동기 모임방 — 토요일 모임 장소 성수 vs 을지로 투표 중";
+  }
+  if (lower.includes("에르메스 립밤")) {
+    return "에르메스 로즈 립밤은 시어버터 베이스로 촉촉하게 밀착되고, 은은한 로즈 컬러가 자연스러운 혈색을 만들어줘요. 현재 최저가는 카카오쇼핑 52,000원이에요.";
+  }
+  if (lower.includes("샤넬 립스틱")) {
+    return "채원님이 선물 받기로 한 샤넬 립스틱이에요. 샤넬 루쥬 알뤼르는 고발색에 촉촉한 텍스처로 인기가 많아요. 현재 최저가는 카카오쇼핑 45,000원이에요.";
+  }
+  if (lower.includes("디올 립글로우")) {
+    return "대화에서 비교했던 디올 립글로우예요. 촉촉한 발색과 자연스러운 컬러 체인지가 특징이에요. 현재 최저가는 네이버 42,000원이에요.";
+  }
+  if (lower.includes("뭐라고") || lower.includes("뭐라 할") || lower.includes("뭐라 말") || lower.includes("다음에 뭐")) {
+    if (chatRoomMessages && chatRoomMessages.length > 0) {
+      return generateNextReply(chatRoomMessages);
+    }
+    return "대화 내용이 없어서 추천이 어려워요. 채팅방에서 다시 시도해주세요!";
   }
 
   return AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)];
+}
+
+function generateChatSummary(messages: { sender: string; text: string }[]): string {
+  const participants = [...new Set(messages.filter(m => m.sender !== "me").map(m => m.sender))];
+  const topics: string[] = [];
+  const allText = messages.map(m => m.text).join(" ");
+  if (allText.includes("루이비통") || allText.includes("립") || allText.includes("샤넬") || allText.includes("디올")) {
+    topics.push("루이비통 신상 가방 화제 → 가격 부담");
+    if (allText.includes("샤넬")) topics.push("샤넬 립스틱 선물 받기로 함");
+    if (allText.includes("디올")) topics.push("디올 립글로우 vs 샤넬 발색 비교");
+    if (allText.includes("에르메스")) topics.push("에르메스 립밤 추천 → 요즘 인기템");
+  } else if (allText.includes("성수") || allText.includes("어디쯤") || allText.includes("약속")) {
+    if (allText.includes("성수")) topics.push("성수동에서 만나기로 함");
+    if (allText.includes("카페") || allText.includes("뚜흐느솔로")) topics.push("카페 뚜흐느솔로에서 약속");
+    if (allText.includes("어디쯤")) topics.push("서로 위치 확인 중");
+  } else {
+    messages.forEach(m => {
+      if (m.sender !== "me" && m.text.length > 5) topics.push(m.text);
+    });
+  }
+  const header = participants.length > 0 ? `${participants.join(", ")}님과의 대화 요약:` : "대화 요약:";
+  const body = topics.length > 0 ? topics.map((t, i) => `${i + 1}. ${t}`).join("\n") : "특별한 내용 없음";
+  return `${header}\n${body}`;
+}
+
+function generateNextReply(messages: { sender: string; text: string }[]): string {
+  const allText = messages.map(m => m.text).join(" ");
+  // 장소 선택 고민 상황
+  if ((allText.includes("성수") || allText.includes("을지로") || allText.includes("한남")) && (allText.includes("어디") || allText.includes("할까") || allText.includes("골라"))) {
+    return "대화를 분석해봤어요! 지금 성수 vs 을지로로 의견이 갈리고 있네요. 예산 인당 3만원 조건이면 이렇게 말해보는 건 어때요?\n\n💬 \"을지로 노가리 골목 쪽은 인당 2만원대로 분위기도 좋고, 2차로 성수 카페 가는 건 어때? 두 군데 다 가면 다 만족하지 않을까ㅎㅎ\"\n\n양쪽 의견을 절충하면서 자연스럽게 정리할 수 있어요!";
+  }
+  // 정산/돈 관련
+  if (allText.includes("정산") || allText.includes("송금") || allText.includes("만원")) {
+    return "정산 관련 대화네요. 이렇게 말해보는 건 어때요?\n\n💬 \"다들 확인했으면 토스로 보내줘~ 계좌는 카카오뱅크 ****야!\"\n\n깔끔하게 정리하면 좋을 것 같아요.";
+  }
+  // 일반적인 선택 고민
+  if (allText.includes("할까") || allText.includes("어때") || allText.includes("고민")) {
+    const lastOther = [...messages].reverse().find(m => m.sender !== "me");
+    return `마지막으로 ${lastOther?.sender ?? "상대방"}이 의견을 물어봤네요. 자연스럽게 의견을 정리해서 답변하면 좋을 것 같아요!\n\n💬 "나는 개인적으로 둘 다 좋은데, 다수결로 정하자! 투표 올려볼까?"\n\n결정을 도와주는 역할을 하면 대화가 잘 마무리될 거예요.`;
+  }
+  // 기본 폴백
+  const lastMsg = [...messages].reverse().find(m => m.sender !== "me");
+  return `${lastMsg?.sender ?? "상대방"}의 마지막 메시지를 기반으로, 가볍게 리액션하거나 의견을 더해보세요!\n\n💬 "오 좋은 생각이다! 나도 찬성~"\n\n자연스럽게 대화 흐름을 이어갈 수 있어요.`;
 }
 
 // Web Speech API 타입
@@ -103,6 +168,11 @@ interface AILayerPopupProps {
   onCreateChatRoom?: (memberNames: string[], initialMessage?: string) => void;
   suggestContext?: SuggestContext;
   chatPartnerName?: string; // 1:1 채팅방 상대 이름 (서제스트 개인화용)
+  chatProductSuggestions?: string[]; // 채팅방 내 추천 상품 (서제스트 칩 3번째부터 삽입)
+  chatRoomMessages?: { sender: string; text: string }[]; // 현재 채팅방 메시지 (대화 요약용)
+  onSendReply?: (text: string) => void; // 추천 답장을 채팅방에 전송
+  allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[]; // 전체 채팅방 (읽음처리용)
+  onMarkAllRead?: () => void; // 전체 읽음처리
 }
 
 // 맥락별 추천 칩
@@ -116,13 +186,11 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
   "chat-list": [
     "새 채팅방 만들어줘",
     "최근 대화 요약해줘",
-    "안읽은 메시지 알려줘",
+    "안읽은 메시지 읽음처리하기",
     "다크모드 켜줘",
   ],
   "chat-room": [
     "대화 요약해줘",
-    "이해수에게 답장",
-    "이 대화 핵심만 정리해줘",
     "다음에 뭐라고 말할까",
   ],
   "chat-room-new": [
@@ -133,13 +201,17 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
   ],
 };
 
-function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string): string[] {
+function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string, chatProductSuggestions?: string[]): string[] {
   const base = SUGGESTIONS_BY_CONTEXT[ctx];
   if (ctx === "chat-room-new" && !chatPartnerName) {
     return base.map((s) => (s.includes("이해수에게") ? "단톡방에 인사해줘" : s));
   }
   if (ctx === "chat-room" && !chatPartnerName) {
-    return base.map((s) => (s.includes("이해수에게 답장") ? "답장해줘" : s));
+    return base.map((s) => (s.includes("이해수에게") ? "답장해줘" : s));
+  }
+  if (chatProductSuggestions && chatProductSuggestions.length > 0 && (ctx === "chat-room" || ctx === "chat-room-new")) {
+    const front = base.slice(0, 1);
+    return [...front, ...chatProductSuggestions];
   }
   return base;
 }
@@ -157,6 +229,8 @@ const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
   { keywords: ["전송", "보내", "보내줘"], action: "send" },
   { keywords: ["사원증"], action: "choonsik-card" },
   { keywords: ["채팅방 만들어", "채팅방 생성", "채팅방 만들기", "톡방 만들어", "단톡방 만들어", "대화방 만들어", "대화방 생성", "대화방 만들기"], action: "create-chatroom" },
+  { keywords: ["읽음처리", "읽음 처리"], action: "mark-read" },
+  { keywords: ["뭐라고", "뭐라 할", "뭐라 말", "다음에 뭐"], action: "next-reply" },
 ];
 
 interface NavStep {
@@ -273,10 +347,7 @@ function LoadingMessages({ dark }: { dark?: boolean }) {
   }, []);
   return (
     <div className="flex flex-col items-center justify-center py-16">
-      <div
-        className="w-[40px] h-[40px] rounded-full animate-spin-loader"
-        style={{ border: `4px solid ${dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`, borderTopColor: dark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)" }}
-      />
+      <img src="/voice-effect.png" alt="로딩" className="w-10 h-10 rounded-full animate-flip-y" />
       <p className={`text-[15px] font-medium mt-4 ${dark ? "text-gray-200" : "text-[#191919]"}`}>
         {LOADING_MSGS[idx]}
       </p>
@@ -303,7 +374,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, allChatRooms, onMarkAllRead }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
   const [, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -335,6 +406,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [darkmodeView, setDarkmodeView] = useState(false);
   const [choonsikCardView, setChoonsikCardView] = useState(false);
   const [, setChoonsikFullscreen] = useState(false);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -381,7 +453,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
     try {
       const [aiText] = await Promise.all([
-        getAIResponse(text, [userMsg]),
+        getAIResponse(text, [userMsg], chatRoomMessages),
         new Promise<void>((r) => setTimeout(r, 3000)),
       ]);
       const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
@@ -392,14 +464,15 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     } catch {
       setAiTyping(false);
     }
-  }, [scrollToBottom]);
+  }, [scrollToBottom, chatRoomMessages]);
 
-  // AI 응답 타이핑 효과
+  // AI 응답 타이핑 효과 (서로게이트 페어/이모지 안전)
   useEffect(() => {
     if (!typingMessageId || typingDisplayedLength < 0) return;
     const msg = chatMessages.find((m) => m.id === typingMessageId && m.role === "ai");
     if (!msg) return;
-    const fullLen = msg.text.length;
+    const chars = Array.from(msg.text);
+    const fullLen = chars.length;
     scrollToBottom();
     if (typingDisplayedLength >= fullLen) {
       setTypingMessageId(null);
@@ -633,18 +706,66 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       }, 1500);
     } else if (action === "create-chatroom") {
       const { members, message } = extractChatRequest(text);
-      inputRef.current?.blur();
-      setTextSending(true);
-      loadingTimerRef.current = setTimeout(() => {
-        setTextSending(false);
-        setTextMode(false);
-        doStop();
-        if (members.length > 0 && onCreateChatRoom) {
+      if (members.length > 0 && onCreateChatRoom) {
+        inputRef.current?.blur();
+        setTextSending(true);
+        loadingTimerRef.current = setTimeout(() => {
+          setTextSending(false);
+          setTextMode(false);
+          doStop();
           onCreateChatRoom(members, message || undefined);
           onClose();
-        }
+          textSendLockRef.current = false;
+        }, 1500);
+      } else {
+        // 대화 상대 미지정 → AI 안내 메시지
+        const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
+        setChatMessages([userMsg]);
+        setTextMode(true);
+        setTypingMessageId(null);
+        scrollToBottom();
+        setAiTyping(true);
+        loadingTimerRef.current = setTimeout(() => {
+          const aiMsg: ChatMessage = {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            text: "새 채팅방을 만드려면 누구랑 만들지 알려줘! 예를 들어 \"이해수랑 채팅방 만들어줘\" 또는 \"김민수, 박채원 단톡방 만들어줘\"처럼 말해주면 바로 만들어줄게.",
+            timestamp: Date.now(),
+          };
+          setChatMessages((prev) => [...prev, aiMsg]);
+          setAiTyping(false);
+          setTypingMessageId(aiMsg.id);
+          setTypingDisplayedLength(0);
+        }, 2000);
         textSendLockRef.current = false;
-      }, 1500);
+      }
+    } else if (action === "message") {
+      fillMessageDraft(text);
+      textSendLockRef.current = false;
+    } else if (action === "mark-read") {
+      // 실제 데이터 기반 응답 생성 (읽음처리 전에 캡쳐)
+      const unreadRooms = (allChatRooms || []).filter(r => r.unreadCount > 0);
+      const totalUnread = unreadRooms.reduce((sum, r) => sum + r.unreadCount, 0);
+      const aiText = unreadRooms.length > 0
+        ? `${unreadRooms.length}개 채팅방의 안읽은 메시지 ${totalUnread}건을 모두 읽음 처리했어요!\n${unreadRooms.map(r => `• ${r.name} — ${r.unreadCount}건`).join("\n")}`
+        : "안읽은 메시지가 없어요! 모두 확인된 상태입니다.";
+      const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
+      setChatMessages([userMsg]);
+      setTextMode(true);
+      setTypingMessageId(null);
+      scrollToBottom();
+      setAiTyping(true);
+      loadingTimerRef.current = setTimeout(() => {
+        if (onMarkAllRead) onMarkAllRead();
+        const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
+        setChatMessages((prev) => [...prev, aiMsg]);
+        setAiTyping(false);
+        setTypingMessageId(aiMsg.id);
+        setTypingDisplayedLength(0);
+        textSendLockRef.current = false;
+      }, 2000);
+    } else if (action === "next-reply") {
+      sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
     } else {
       // 명령어 미매칭 → 채팅 모드로 AI 대화
       sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
@@ -665,14 +786,42 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
 
     const body = matchWithBody ? matchWithBody[2] : "";
-    const draft = body ? `${recipient}에게 ${body}` : "";
-    updateInputText(draft);
-    setTextMode(false);
-    updateReplyMode(true);
-    setTranscript("");
-    setInterimText("");
-    setStatusMessage(null);
-    doStart();
+
+    if (body) {
+      // 내용 있으면 기존처럼 draft 채우고 reply 모드
+      updateInputText(`${recipient}에게 ${body}`);
+      setTextMode(false);
+      updateReplyMode(true);
+      setTranscript("");
+      setInterimText("");
+      setStatusMessage(null);
+      doStart();
+    } else {
+      // 내용 없으면 AI 안내 메시지를 채팅으로 보여줌
+      doStop();
+      setTranscript("");
+      setInterimText("");
+      setStatusMessage(null);
+      const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text: voiceText, timestamp: Date.now() };
+      setChatMessages([userMsg]);
+      setTextMode(true);
+      setTypingMessageId(null);
+      scrollToBottom();
+      setAiTyping(true);
+      loadingTimerRef.current = setTimeout(() => {
+        const aiMsg: ChatMessage = {
+          id: `a-${Date.now()}`,
+          role: "ai",
+          text: `${recipient}에게 보낼 메시지를 입력해주세요. 음성 또는 텍스트로 작성할 수 있어요. 전달할 내용을 알려주시면 최근 대화를 참고해서 자연스럽게 보내드릴게요!`,
+          timestamp: Date.now(),
+        };
+        setChatMessages((prev) => [...prev, aiMsg]);
+        setAiTyping(false);
+        setTypingMessageId(aiMsg.id);
+        setTypingDisplayedLength(0);
+        updateReplyMode(true);
+      }, 2000);
+    }
   }
 
   function handleVoiceSend(text: string) {
@@ -1085,21 +1234,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           >
               {/* ── 좌상단 회의 모드 버튼 + 우상단 내리기 버튼 ── */}
               {!textMode && !darkmodeView && !meetingMode && (
-                <>
-                  <div className="absolute z-10" style={{ top: 16, left: 16 }}>
-                    <button
-                      type="button"
-                      className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
-                      style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
-                      aria-label="회의 모드"
-                      onClick={(e) => { e.stopPropagation(); doStop(); setMeetingMode(true); }}
-                    >
-                      <svg className={`w-5 h-5 ${darkMode ? "text-gray-200" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="absolute z-10" style={{ top: 16, right: 16 }}>
+                <div className="absolute z-10" style={{ top: 16, right: 16 }}>
                     <button
                       type="button"
                       className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
@@ -1111,17 +1246,16 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
-                  </div>
-                </>
+                </div>
               )}
               {/* ── 회의 모드 UI ── */}
               {meetingMode && (
                 <div className="relative flex flex-col items-center px-5 pt-8 pb-5 pointer-events-auto">
                   {/* 우상단 접기 버튼 */}
-                  {meetingRecording && !meetingSaved && (
+                  {!meetingSaved && (
                     <button
                       type="button"
-                      className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center active:opacity-70 ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+                      className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center active:opacity-70 ${darkMode ? "bg-white/20" : "bg-white"}`}
                       onClick={() => setMinimized(true)}
                     >
                       <svg className={`w-4 h-4 ${darkMode ? "text-gray-300" : "text-gray-500"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -1132,7 +1266,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   {meetingSaved ? (
                     <>
                       {/* 저장 완료 아이콘 */}
-                      <div className="w-14 h-14 rounded-full bg-[#FF3B30] mb-5" />
+                      <div className="w-14 h-14 rounded-full bg-[#FEE500] mb-5 flex items-center justify-center">
+                        <svg className="w-7 h-7 text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
                       {/* 저장 안내 문구 */}
                       <p className={`text-[17px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`}>
                         녹음이 저장되었습니다
@@ -1195,14 +1333,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                               onClick={() => stopMeetingRecording()}
                             >
                               중단
-                            </button>
-                            <button
-                              type="button"
-                              className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                              style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
-                              onClick={() => setMinimized(true)}
-                            >
-                              접기
                             </button>
                             <button
                               type="button"
@@ -1299,15 +1429,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     ))}
                   </div>
                 ) : isLoading ? (
-                  /* ── 로딩 스피너 ── */
+                  /* ── 로딩: 어시스턴트 로고 회전 ── */
                   <div className="relative w-[104px] h-[104px] flex items-center justify-center">
-                    <div
-                      className="w-[40px] h-[40px] rounded-full animate-spin-loader"
-                      style={{
-                        border: `4px solid ${darkMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"}`,
-                        borderTopColor: darkMode ? "#ffffff" : "#000000",
-                      }}
-                    />
+                    <img src="/voice-effect.png" alt="로딩" className="w-10 h-10 rounded-full animate-flip-y" />
                   </div>
                 ) : (
                   /* ── 보이스 오브 이펙트 ── */
@@ -1316,18 +1440,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       src="/voice-effect.png"
                       alt=""
                       className="absolute inset-0 w-full h-full object-contain animate-voice-breathe"
-                    />
-                    <div
-                      className="absolute inset-0 m-auto w-[70px] h-[70px] rounded-full animate-orb-1"
-                      style={{ background: "radial-gradient(circle, rgba(236,72,153,0.4), rgba(236,72,153,0) 70%)", mixBlendMode: "screen" }}
-                    />
-                    <div
-                      className="absolute inset-0 m-auto w-[60px] h-[60px] rounded-full animate-orb-2"
-                      style={{ background: "radial-gradient(circle, rgba(168,85,247,0.35), rgba(168,85,247,0) 70%)", mixBlendMode: "screen" }}
-                    />
-                    <div
-                      className="absolute inset-0 m-auto w-[55px] h-[55px] rounded-full animate-orb-3"
-                      style={{ background: "radial-gradient(circle, rgba(59,130,246,0.35), rgba(59,130,246,0) 70%)", mixBlendMode: "screen" }}
                     />
                   </div>
                 )}
@@ -1565,8 +1677,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               {/* ── Darkmode 모드: 토글 UI (cross-fade) ── */}
               <div
-                className="absolute inset-x-0 top-0 bottom-0 flex flex-col transition-opacity duration-500 z-20"
-                style={{ opacity: darkmodeView ? 1 : 0, pointerEvents: darkmodeView ? "auto" : "none" }}
+                className="absolute inset-x-0 top-0 bottom-0 flex flex-col z-20"
+                style={{ opacity: darkmodeView ? 1 : 0, pointerEvents: darkmodeView ? "auto" : "none", transition: darkmodeView ? "opacity 0.35s ease" : "opacity 0.3s ease" }}
               >
                 <div className="flex flex-col gap-3 px-5 pt-5">
                   {/* 아이콘 + 타이틀 가로 정렬 */}
@@ -1630,7 +1742,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     type="button"
                     className={`w-full h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors duration-500 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                     style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
-                    onClick={() => { resetToDefaultView(); setDarkmodeView(false); doStart(); }}
+                    onClick={() => { setDarkmodeView(false); setTimeout(() => { resetToDefaultView(); doStart(); }, 150); }}
                   >
                     완료
                   </button>
@@ -1792,29 +1904,60 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         <div className={AI_SENT_BUBBLE_CLASS} style={AI_SENT_BUBBLE_STYLE}>
                           {msg.text}
                         </div>
-                      ) : (
-                        <div className={`${AI_RECEIVED_BUBBLE_CLASS} leading-ai-reply ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={AI_RECEIVED_BUBBLE_STYLE}>
-                          {renderChatWithBold(msg.id === typingMessageId ? msg.text.slice(0, typingDisplayedLength) : msg.text)}
-                        </div>
-                      )}
+                      ) : (() => {
+                        const displayText = msg.id === typingMessageId ? Array.from(msg.text).slice(0, typingDisplayedLength).join("") : msg.text;
+                        const quoteMatch = msg.text.match(/💬\s*"([^"]+)"/);
+                        const isTypingDone = msg.id !== typingMessageId;
+                        return (
+                          <div className="flex flex-col items-start gap-2">
+                            <div className={`${AI_RECEIVED_BUBBLE_CLASS} leading-ai-reply ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={{ ...AI_RECEIVED_BUBBLE_STYLE, position: "relative" }}>
+                              {/* 풀 텍스트로 버블 크기 고정 (투명) */}
+                              <span style={{ visibility: "hidden" }} aria-hidden="true">{renderChatWithBold(msg.text)}</span>
+                              {/* 타이핑 중인 텍스트 오버레이 */}
+                              <span style={{ position: "absolute", inset: 0, paddingTop: 6, paddingBottom: 6 }}>{renderChatWithBold(displayText)}</span>
+                            </div>
+                            {quoteMatch && isTypingDone && onSendReply && (
+                              <div className="flex items-center gap-2 ml-[14px]">
+                                <button
+                                  type="button"
+                                  className={`flex items-center gap-1.5 px-4 h-[40px] rounded-full text-[13px] font-semibold active:opacity-70 ${darkMode ? "bg-[#FEE500] text-[#191919]" : "bg-[#FEE500] text-[#191919]"}`}
+                                  style={{ boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSendReply(quoteMatch[1]);
+                                    onClose();
+                                  }}
+                                >
+                                  이 메시지 보내기
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`w-[40px] h-[40px] rounded-full flex items-center justify-center active:opacity-70 ${darkMode ? "bg-white/50" : "bg-white/50"}`}
+                                  style={{ border: "1px solid rgba(0,0,0,0.08)" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    sendChatMessage("다음에 뭐라고 말할까");
+                                  }}
+                                >
+                                  <svg className={`w-[18px] h-[18px] ${darkMode ? "text-white" : "text-[#191919]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
-                  {/* AI 응답 로딩 (점 3개 애니메이션) */}
+                  {/* AI 응답 로딩 */}
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
-                      <div className={`flex items-center gap-1.5 py-2`}>
-                        <span
-                          className="w-2 h-2 rounded-full bg-pink-500"
-                          style={{ animation: "typing-dot 1.2s ease-in-out infinite" }}
-                        />
-                        <span
-                          className="w-2 h-2 rounded-full bg-pink-500"
-                          style={{ animation: "typing-dot 1.2s ease-in-out infinite", animationDelay: "0.15s" }}
-                        />
-                        <span
-                          className="w-2 h-2 rounded-full bg-pink-500"
-                          style={{ animation: "typing-dot 1.2s ease-in-out infinite", animationDelay: "0.3s" }}
-                        />
+                      <div className="py-2">
+                        <img src="/voice-effect.png" alt="로딩" className="w-8 h-8 rounded-full animate-flip-y" />
                       </div>
                     </div>
                   )}
@@ -1839,7 +1982,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     }}
                   >
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-4">
-                    {getSuggestionsForContext(suggestContext, chatPartnerName).map((t) => {
+                    {getSuggestionsForContext(suggestContext, chatPartnerName, chatProductSuggestions).map((t) => {
                       let text = t === "다크모드 켜줘" ? (darkMode ? "다크모드 꺼줘" : "다크모드 켜줘") : t;
                       if ((suggestContext === "chat-room" || suggestContext === "chat-room-new") && text.includes("이해수") && chatPartnerName) {
                         text = text.replace("이해수", chatPartnerName);
@@ -1852,9 +1995,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         className={`flex-shrink-0 relative overflow-hidden px-[14px] h-[40px] rounded-full text-[14px] font-medium whitespace-nowrap transition-colors backdrop-blur-[30px] ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                         style={darkMode
                           ? {
-                              background: "radial-gradient(ellipse 100% 80% at 0% 0%, rgba(255,255,255,0.35) 0%, transparent 55%), rgba(255,255,255,0.12)",
-                              border: "1px solid rgba(255,255,255,0.35)",
-                              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                              background: "rgba(255,255,255,0.12)",
+                              border: "1px solid rgba(255,255,255,0.12)",
                             }
                           : {
                               background: "radial-gradient(ellipse 100% 80% at 0% 0%, rgba(255,255,255,0.7) 0%, transparent 55%), rgba(255,255,255,0.5)",
@@ -1877,7 +2019,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   );
                 })()}
                 <div
-                  className={`flex items-center gap-2 pl-4 pr-2 h-[42px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : ""}`}
+                  className={`flex items-center gap-2 px-2 h-[48px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : ""}`}
                   style={darkMode ? { boxShadow: "0 0 6px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.2)" } : { backgroundColor: "rgba(255,255,255,0.96)", boxShadow: "0 0 6px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,1)" }}
                   onClick={() => {
                     if (!textSending && !sendStatus) {
@@ -1886,11 +2028,32 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     }
                   }}
                 >
+                  <button
+                    type="button"
+                    className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
+                    style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)" }}
+                    aria-label={textMode && chatMessages.length > 0 ? "닫기" : "더보기"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (textMode && chatMessages.length > 0) {
+                        setChatMessages([]);
+                        setTextMode(false);
+                        setChoonsikCardView(false);
+                        updateInputText("");
+                        setTypingMessageId(null);
+                        setAiTyping(false);
+                        inputRef.current?.blur();
+                      } else {
+                        setPlusMenuOpen((prev) => !prev);
+                      }
+                    }}
+                  >
+                    <svg className={`w-5 h-5 transition-transform duration-300 ${darkMode ? "text-white" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ transform: (textMode && chatMessages.length > 0) || plusMenuOpen ? "rotate(45deg)" : "rotate(0deg)" }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
                   {textSending && (
-                    <div
-                      className="w-4 h-4 rounded-full animate-spin-loader flex-shrink-0"
-                      style={{ border: `2px solid ${darkMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"}`, borderTopColor: darkMode ? "#fff" : "#000" }}
-                    />
+                    <img src="/voice-effect.png" alt="로딩" className="w-[24px] h-[24px] rounded-full animate-flip-y flex-shrink-0" />
                   )}
                   <label className="flex-1 min-w-0 cursor-text">
                     <input
@@ -1902,7 +2065,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       autoCapitalize="off"
                       value={inputText}
                       placeholder={sendStatus ? sendStatus : textSending ? "처리 중..." : giftResult ? `${giftResult}에게 선물 메시지 보내기` : replyMode ? "이해수에게 답장" : "카나나에게 요청하기"}
-                      className={`w-full text-base outline-none bg-transparent ${darkMode ? "text-gray-100" : "text-gray-900"} ${sendStatus ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : (darkMode ? "placeholder:text-gray-400" : "placeholder:text-gray-900/40")}`}
+                      className={`w-full text-base outline-none bg-transparent ${darkMode ? "text-gray-100" : "text-gray-900"} ${sendStatus ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : textSending ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : (darkMode ? "placeholder:text-gray-400" : "placeholder:text-gray-900/40")}`}
                       style={{ fontSize: "16px" }}
                       disabled={textSending || !!sendStatus}
                       onFocus={() => setTextMode(true)}
@@ -1998,6 +2161,53 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       </>
 
       {/* 사원증 풀스크린 오버레이 제거됨 — 카드 본체 안에서 표시 */}
+
+      {/* ── 플러스 메뉴 팝업 (팝업 위에 뜨는 별도 레이어) ── */}
+      {plusMenuOpen && (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{ zIndex: 70, pointerEvents: "auto" }}
+            onClick={(e) => { e.stopPropagation(); setPlusMenuOpen(false); }}
+          />
+          <div
+            className="absolute"
+            style={{ left: 28, bottom: 80, zIndex: 71, pointerEvents: "auto" }}
+          >
+            <div
+              className={`rounded-[20px] overflow-hidden ai-layer-blur ${darkMode ? "dark" : ""}`}
+              style={{
+                boxShadow: darkMode
+                  ? "0 8px 32px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.12)"
+                  : "0 8px 32px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.8)",
+                animation: "gift-card-enter 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards",
+              }}
+            >
+              <div className="py-2">
+                {[
+                  { label: "음성녹음", action: () => { setPlusMenuOpen(false); setMeetingMode(true); }, icon: (<svg className={`w-[22px] h-[22px] ${darkMode ? "text-gray-200" : "text-[#191919]"}`} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="currentColor" /><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth={1.6} /></svg>) },
+                  { label: "번역", action: () => { setPlusMenuOpen(false); }, icon: (<svg className={`w-[22px] h-[22px] ${darkMode ? "text-gray-200" : "text-[#191919]"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" /></svg>) },
+                  { label: "파일첨부", action: () => { setPlusMenuOpen(false); }, icon: (<svg className={`w-[22px] h-[22px] ${darkMode ? "text-gray-200" : "text-[#191919]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}><path strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-9.19 9.19a5.64 5.64 0 01-7.98-7.98l9.19-9.19a3.76 3.76 0 015.32 5.32l-9.2 9.19a1.88 1.88 0 01-2.66-2.66l8.49-8.48" /></svg>) },
+                ].map((item, i, arr) => (
+                  <div key={i}>
+                    <button
+                      type="button"
+                      className={`w-full flex items-center gap-3 px-5 py-3 active:opacity-70 ${darkMode ? "text-white" : "text-[#191919]"}`}
+                      onClick={(e) => { e.stopPropagation(); item.action(); }}
+                    >
+                      {item.icon}
+                      <span className="text-[15px] font-medium">{item.label}</span>
+                    </button>
+                    {i < arr.length - 1 && (
+                      <div className={`mx-5 h-px ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

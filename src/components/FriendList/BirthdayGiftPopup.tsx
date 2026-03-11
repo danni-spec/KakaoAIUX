@@ -16,7 +16,7 @@ const PRODUCT = {
   satisfactionPct: 94,
   originalPrice: 98000,
   salePrice: 97000,
-  image: "/hermes.png",
+  image: "/hermes.png?v=2",
   payMethod: "카카오페이 연결카드",
   discount: "현대카드 1천원 즉시 할인",
 };
@@ -150,7 +150,7 @@ function WishlistPhase({
           <p className="text-[12px] text-[#767676] mt-0.5">
             옵션: {PRODUCT.option}
           </p>
-          <p className="text-[12px] text-[#2B7FF2] mt-1 font-medium">
+          <p className="text-[12px] text-[#767676] mt-1 font-medium">
             후기 {PRODUCT.reviewCount}건 중 매우만족 {PRODUCT.satisfactionPct}%
           </p>
         </div>
@@ -181,7 +181,7 @@ function WishlistPhase({
         </button>
         <button
           onClick={onGift}
-          className="flex-1 py-3 rounded-xl bg-[#FEE500] text-[14px] font-semibold text-[#191919] active:bg-[#F6DD00] transition-colors"
+          className="flex-1 py-3 rounded-xl bg-white text-[14px] font-semibold text-[#191919] border border-gray-200 active:bg-gray-50 transition-colors"
         >
           선물하기
         </button>
