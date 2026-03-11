@@ -1,7 +1,7 @@
 import { SquircleAvatar, SquircleDiv } from "./SquircleAvatar";
 
 const UPDATED_FRIENDS = [
-  { name: "카나나알림", hasUpdate: true, isAd: false, photo: "/voice-effect.png" },
+  { name: "카나나저널", hasUpdate: true, isAd: false, photo: "/voice-effect.png" },
   { name: "김영지", hasUpdate: false, isAd: false, photo: "/profile-yerin.png" },
   { name: "이해수 ❤️", hasUpdate: false, isAd: false, photo: "/profile-jieun.png" },
   { name: "Hermes", hasUpdate: true, isAd: true, photo: "/hermes.png?v=2" },
@@ -30,7 +30,7 @@ export function UpdatedFriendsSection({ darkMode = false, onFriendClick }: Updat
           <div
             key={friend.name}
             className="flex-shrink-0 flex flex-col items-center gap-1.5 cursor-pointer select-none"
-            style={friend.name === "카나나알림" ? { touchAction: "manipulation" } : undefined}
+            style={friend.name === "카나나저널" ? { touchAction: "manipulation" } : undefined}
             onClick={(e) => {
               e.stopPropagation();
               onFriendClick?.(friend.name);
@@ -41,8 +41,8 @@ export function UpdatedFriendsSection({ darkMode = false, onFriendClick }: Updat
                 <SquircleAvatar
                   src={friend.photo}
                   alt={friend.name}
-                  className={`w-[48px] h-[48px] ${friend.name === "카나나알림" ? "animate-flip-y" : ""}`}
-                  noOutline={friend.name === "카나나알림"}
+                  className={`w-[48px] h-[48px] ${friend.name === "카나나저널" ? "animate-flip-y" : ""}`}
+                  noOutline={friend.name === "카나나저널"}
                 />
               ) : (
                 /* 글자 플레이스홀더도 SquircleDiv로 동일한 프레임 적용 */

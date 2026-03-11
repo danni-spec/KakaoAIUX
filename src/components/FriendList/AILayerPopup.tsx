@@ -106,6 +106,13 @@ async function getAIResponse(
     return "대화 내용이 없어서 추천이 어려워요. 채팅방에서 다시 시도해주세요!";
   }
 
+  if (lower.includes("일기") && lower.includes("써")) {
+    if (lower.includes("감사")) {
+      return "📝 오늘의 감사일기\n\n오늘 하루도 감사한 일이 참 많았어요.\n\n1. 아침에 따뜻한 커피 한 잔으로 하루를 시작할 수 있어서 감사해요\n2. 점심에 동료들과 맛있는 식사를 함께해서 좋았어요\n3. 퇴근길 날씨가 선선해서 기분 좋은 산책을 할 수 있었어요\n\n작은 것에도 감사할 줄 아는 하루였습니다 ☺️";
+    }
+    return "📝 오늘의 일기\n\n오늘은 평소보다 바쁜 하루였어요. 오전에 팀 미팅이 있었고, 오후에는 디자인 리뷰를 진행했어요. 점심에는 동료들과 판교역 근처 맛집을 다녀왔는데, 분위기가 정말 좋았어요.\n\n퇴근 후에는 친구와 카톡으로 주말 약속을 잡았어요. 성수동 카페에서 만나기로 했는데 벌써부터 기대돼요!\n\n내일은 조금 여유롭게 보내고 싶은 하루입니다 🌙";
+  }
+
   return "좋은 질문이에요! 조금 더 자세히 말씀해주시면 더 잘 도와드릴 수 있어요.";
 }
 
@@ -406,7 +413,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: _sn = false, onNotificationListClose: _snClose }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: showNotiProp = false, onNotificationListClose: onNotiClose }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimText, setInterimText] = useState("");
@@ -440,6 +447,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [choonsikCardView, setChoonsikCardView] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
+  const [notificationListView, setNotificationListView] = useState(false);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiTyping, setAiTyping] = useState(false);
@@ -648,6 +656,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     setSummaryResult(null);
     setGiftResult(null);
     setChoonsikCardView(false);
+    setNotificationListView(false);
     updateInputText("");
     setTypingMessageId(null);
     setAiTyping(false);
@@ -1058,6 +1067,13 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
   }, [isOpen, popupLockedHeight]);
 
+  // 종 아이콘(알림) 클릭 → 알림 리스트 뷰 활성화
+  useEffect(() => {
+    if (showNotiProp && isOpen) {
+      setNotificationListView(true);
+    }
+  }, [showNotiProp, isOpen]);
+
   // 미니 플로팅 버튼 드래그 관련 상태
   const draggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -1167,7 +1183,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
   // 하단 입력/칩 영역의 paddingTop 계산 (모드별 분기)
   function getBottomPaddingTop(): number {
-    if (wishlistView || meetingMode) return 0;
+    if (wishlistView || meetingMode || notificationListView) return 0;
     if (directionMode) return 380;
     if (darkmodeView) return 156;
     if (giftResult && textMode) return 0;
@@ -1178,7 +1194,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
   // 하단 입력/칩 영역의 paddingBottom 계산 (모드별 분기)
   function getBottomPaddingBottom(): number {
-    if (wishlistView || meetingMode) return 0;
+    if (wishlistView || meetingMode || notificationListView) return 0;
     if (textMode) return chatMessages.length > 0 ? 8 : 16;
     return 16;
   }
@@ -1280,22 +1296,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
-              {/* ── 좌상단 회의 모드 버튼 + 우상단 내리기 버튼 ── */}
-              {!textMode && !darkmodeView && !meetingMode && (
-                <div className="absolute z-10" style={{ top: 16, right: 16 }}>
-                    <button
-                      type="button"
-                      className="p-2 rounded-full backdrop-blur-2xl backdrop-saturate-[1.8] transition-opacity active:opacity-80"
-                      style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.4)", boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 1px 3px rgba(0,0,0,0.2)" : "inset 0 0 0 0.5px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.08)" }}
-                      aria-label="접기"
-                      onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
-                    >
-                      <svg className={`w-5 h-5 ${darkMode ? "text-gray-200" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                </div>
-              )}
               {/* ── 회의 모드 UI ── */}
               {meetingMode && (
                 <div className="relative flex flex-col items-center px-5 pt-8 pb-5 pointer-events-auto">
@@ -1333,7 +1333,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         <button
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                          style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)" }}
+                          style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
                           onClick={() => exitMeetingMode()}
                         >
                           확인
@@ -1381,7 +1381,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                             <button
                               type="button"
                               className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                              style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                              style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
                               onClick={() => exitMeetingMode()}
                             >
                               나가기
@@ -1400,7 +1400,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                             <button
                               type="button"
                               className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                              style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                              style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
                               onClick={() => stopMeetingRecording()}
                             >
                               중단
@@ -1459,9 +1459,115 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 </div>
               )}
 
+              {/* ── 알림 & 일기 리스트 뷰 ── */}
+              {notificationListView && !textMode && (
+                <div className="w-full px-4 pt-10 pb-4 pointer-events-auto overflow-y-auto scrollbar-hide" style={{ maxHeight: 600 }}>
+                  <p className={`text-[18px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontFamily: "'Poppins', sans-serif", marginLeft: 4, marginTop: -12 }}><img src="/voice-effect.png" alt="" className="inline-block w-[26px] h-[26px] mr-1.5 -mt-0.5" />Kanana Journal</p>
+
+                  {/* 오늘의 일기 디스크립션 */}
+                  <p
+                    className={`text-[13px] leading-relaxed w-[80%] ${darkMode ? "text-gray-300" : "text-[#191919]"}`}
+                    style={{ animation: "noti-fade-in 0.3s ease-out 0s both", marginLeft: 4, marginBottom: 24 }}
+                  >Dannion.K님, 오늘 하루를 분석한 내용을 바탕으로 하루를 기록해드릴게요. 대화, 감정, 일정을 모아 나만의 일기를 완성해보세요.</p>
+
+                  {/* 나머지 알림 셀 리스트 */}
+                  {[
+                    { title: "오늘의 감정 온도계", desc: "오늘 가장 많이 사용한 단어는 '감사', '대박', '바쁨'이었어요. 긍정적인 대화가 평소보다 30% 많았던 활기찬 하루였네요!", buttons: [], img: "/diary-photo-4.png" },
+                    { title: "관계 에너지 소모 리포트", desc: "오늘 5개의 단체 채팅방에서 약 300개의 메시지를 읽으셨어요. 조금 피로할 수 있는 수치예요. 지금은 '방해 금지 모드'를 켜고 휴식하는 건 어떨까요?", buttons: [], img: "/diary-photo-5.png" },
+                    { title: "고마운 마음 전달 제안", desc: "오늘 이해수님과 가장 긴 대화를 나누며 위로를 받으셨네요. 자기 전에 '오늘 고마웠어'라고 짧은 인사를 남겨보는 건 어떨까요?", buttons: ["이해수님에게 메시지 보내기"], profiles: ["/profile-ieun.png"] },
+                    { title: "대화의 연속성 유지", desc: "내일은 부모님 생신이네요. 오늘 가족방에서 나왔던 식당 예약 확인을 한 번 더 체크해 보세요.", buttons: ["식당 예약 확인", "가족방 열기"], profiles: ["/profile-dannion.png", "/profile-yuna.png"] },
+                    { title: "미답장 예약 설정", desc: "아직 답장하지 못한 박채원님의 메시지가 있어요. 지금 답하기 어렵다면, 내일 출근 시간에 맞춰 예약 메시지를 작성해 볼까요?", buttons: ["예약 메시지 작성하기"], img: "/diary-photo-2.png" },
+                  ].map((item, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-[16px] p-4 mb-2 ${darkMode ? "bg-white/8" : "bg-white/80"}`}
+                      style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)", animation: `noti-fade-in 0.3s ease-out ${i * 0.06}s both` }}
+                    >
+                      <p className={`text-[14px] mb-0.5 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontWeight: item.title === "오늘의 감정 온도계" ? 700 : 600 }}>{item.title}</p>
+                      <div className="flex gap-3">
+                        <p className={`flex-1 min-w-0 text-[13px] leading-relaxed ${darkMode ? "text-gray-400" : "text-[#767676]"}`}>{item.desc}</p>
+                        {(item as { profiles?: string[] }).profiles ? (
+                          <div className="flex -space-x-2 flex-shrink-0">
+                            {(item as { profiles?: string[] }).profiles!.map((src, pi) => (
+                              <div key={pi} className="w-[36px] h-[36px] p-[2px]" style={{ WebkitMaskImage: "url(/squircle.svg)", WebkitMaskSize: "cover", maskImage: "url(/squircle.svg)", maskSize: "cover", background: "white" }}>
+                                <div className="w-full h-full" style={{ WebkitMaskImage: "url(/squircle.svg)", WebkitMaskSize: "cover", maskImage: "url(/squircle.svg)", maskSize: "cover" }}>
+                                  <img src={src} alt="" className="w-full h-full object-cover" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : item.img ? (
+                          <img src={item.img} alt="" className="w-[42px] h-[42px] rounded-[8px] object-cover flex-shrink-0" />
+                        ) : null}
+                      </div>
+                      <div className="flex gap-2 flex-wrap mt-2">
+                        {item.buttons.map((label) => (
+                          <button
+                            key={label}
+                            type="button"
+                            className={`px-3 h-[36px] rounded-full text-[13px] font-medium border ${darkMode ? "border-white/20 text-gray-200 bg-transparent" : "border-white text-[#4A8DF6] bg-white"}`} style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)" }}
+                            onClick={() => {
+                              setNotificationListView(false);
+                              onNotiClose?.();
+                              updateInputText(label);
+                              setTextMode(true);
+                              setTimeout(() => handleTextSend(), 50);
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* 사진 캐로셀 */}
+                  <div
+                    className="mt-4 -mx-4 px-4 overflow-x-auto scrollbar-hide"
+                    style={{ animation: "noti-fade-in 0.3s ease-out 0.06s both" }}
+                  >
+                    <div className="flex gap-1.5" style={{ width: "max-content" }}>
+                      {[
+                        "/diary-photo-1.png",
+                        "/diary-photo-2.png",
+                        "/diary-photo-3.png",
+                        "/diary-photo-4.png",
+                        "/diary-photo-5.png",
+                        "/diary-photo-6.png",
+                      ].map((src, i) => (
+                        <div key={i} className="w-[96px] h-[96px] flex-shrink-0 rounded-[15px] overflow-hidden">
+                          <img src={src} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 하단 CTA 버튼 */}
+                  <div className="flex gap-2 mt-4">
+                    {["나챗방으로 전송", "Kanvas에 기록"].map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        className={`flex-1 h-[44px] rounded-full text-[14px] font-medium bg-white text-[#191919]`}
+                        style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)" }}
+                        onClick={() => {
+                          setNotificationListView(false);
+                          onNotiClose?.();
+                          updateInputText(label);
+                          setTextMode(true);
+                          setTimeout(() => handleTextSend(), 50);
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 빈영역 센터: 요약 결과 / 보이스 이펙트 / 로딩 스피너 (음성 모드일 때만) */}
               {(() => {
-                const centerHidden = textMode || choonsikCardView || directionMode || darkmodeView || wishlistView || meetingMode;
+                const centerHidden = textMode || choonsikCardView || directionMode || darkmodeView || wishlistView || meetingMode || notificationListView;
                 return (
               <div
                 className="flex flex-col items-center justify-center gap-1 pointer-events-none overflow-hidden"
@@ -1549,7 +1655,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       <button
                         type="button"
                         className="flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold text-gray-700 active:opacity-80"
-                        style={{ background: "rgba(0,0,0,0.06)" }}
+                        style={{ background: "rgba(0,0,0,0.14)" }}
                         onClick={() => { resetToDefaultView(); setDirectionMode(false); setDirectionDest(""); doStart(); }}
                       >
                         카카오맵
@@ -1675,7 +1781,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         <button
                           type="button"
                           className="w-full h-[44px] rounded-[40px] text-[15px] font-semibold text-gray-700 active:opacity-80"
-                          style={{ background: "rgba(0,0,0,0.06)" }}
+                          style={{ background: "rgba(0,0,0,0.14)" }}
                           onClick={finishNavigation}
                         >
                           안내 종료
@@ -1738,7 +1844,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       <button
                         type="button"
                         className="w-full h-[44px] rounded-[40px] text-[15px] font-semibold text-gray-700 active:opacity-80"
-                        style={{ background: "rgba(0,0,0,0.06)" }}
+                        style={{ background: "rgba(0,0,0,0.14)" }}
                         onClick={finishNavigation}
                       >
                         완료
@@ -1814,7 +1920,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   <button
                     type="button"
                     className={`w-full h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors duration-500 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                    style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                    style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
                     onClick={() => { setDarkmodeView(false); setTimeout(() => { resetToDefaultView(); doStart(); }, 150); }}
                   >
                     완료
@@ -1879,7 +1985,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         <button
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                          style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                          style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
                           onClick={() => { resetToDefaultView(); setWishlistView(false); setGiftResult(null); setWishlistPhase("product"); doStart(); }}
                         >
                           선물하기 홈
@@ -1937,7 +2043,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         <button
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                          style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
+                          style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
                           onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
                         >
                           친구와 1:1 채팅
@@ -2053,7 +2159,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               <div
                 className="px-4 transition-all duration-[400ms]"
-                style={{ flexShrink: 0, paddingTop: getBottomPaddingTop(), paddingBottom: getBottomPaddingBottom(), height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ flexShrink: 0, paddingTop: getBottomPaddingTop(), paddingBottom: getBottomPaddingBottom(), height: (wishlistView || meetingMode || notificationListView) ? 0 : "auto", overflow: (wishlistView || meetingMode || notificationListView) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
                 {!directionMode && !darkmodeView && !wishlistView && (() => {

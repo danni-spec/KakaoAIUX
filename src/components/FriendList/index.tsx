@@ -102,6 +102,9 @@ export function FriendList() {
   const handleFriendClick = useCallback((name: string) => {
     if (name === "이해수 ❤️") {
       setNotificationOpen(true);
+    } else if (name === "카나나저널") {
+      setShowNotificationList(true);
+      flushSync(() => setAiPopupOpen(true));
     }
   }, []);
 
@@ -339,10 +342,6 @@ export function FriendList() {
             <AIFriendsSection
               darkMode={darkMode}
               onOpenAI={openAIPopup}
-              onNotificationClick={() => {
-                setShowNotificationList(true);
-                openAIPopup();
-              }}
             />
             <FavoriteFriendsSection darkMode={darkMode} />
             <AllFriendsSection darkMode={darkMode} />
