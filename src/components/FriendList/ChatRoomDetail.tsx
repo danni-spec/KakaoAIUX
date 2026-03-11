@@ -40,7 +40,7 @@ function LinkifyText({ text, onLinkClick }: { text: string; onLinkClick: (keywor
   const segments = parseLinkifyText(text);
   const [tapped, setTapped] = useState<Set<number>>(() => new Set());
   if (segments.length === 1 && segments[0].type === "text") return <>{text}</>;
-  return (<>{segments.map((seg, i) => seg.type === "link" ? (tapped.has(i) ? <span key={i}>{seg.value}</span> : <span key={i} role="button" tabIndex={0} className="cursor-pointer active:opacity-80 animate-pink-flow" style={{ background: "linear-gradient(90deg, #E83070, #E83070 40%, #FFD700 48%, #FFD700 52%, #E83070 60%, #E83070)", backgroundSize: "200% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", whiteSpace: "nowrap" }} onClick={(e) => { e.stopPropagation(); setTapped((prev) => new Set(prev).add(i)); onLinkClick(seg.value); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTapped((prev) => new Set(prev).add(i)); onLinkClick(seg.value); } }}>{seg.value}</span>) : <span key={i}>{seg.value}</span>)}</>);
+  return (<>{segments.map((seg, i) => seg.type === "link" ? (tapped.has(i) ? <span key={i}>{seg.value}</span> : <span key={i} role="button" tabIndex={0} className="cursor-pointer active:opacity-80 animate-pink-flow" style={{ background: "linear-gradient(90deg, #E83070, #E83070 40%, #FFD700 48%, #FFD700 52%, #E83070 60%, #E83070)", backgroundSize: "200% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }} onClick={(e) => { e.stopPropagation(); setTapped((prev) => new Set(prev).add(i)); onLinkClick(seg.value); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTapped((prev) => new Set(prev).add(i)); onLinkClick(seg.value); } }}>{seg.value}</span>) : <span key={i}>{seg.value}</span>)}</>);
 }
 
 function formatMessageTime(ts: number): string {
@@ -332,14 +332,14 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`px-3 py-[9px] min-h-[36px] flex items-center text-[15px] leading-snug ${
+                    className={`px-3 py-[9px] min-h-[36px] text-[15px] leading-snug ${
                       isMe
                         ? "bg-[#FEE500] text-[#191919]"
                         : darkMode
                           ? "bg-[#3a3a3c] text-white"
                           : "bg-white text-[#191919]"
                     }`}
-                    style={{ borderRadius: CHAT_BUBBLE_RADIUS }}
+                    style={{ borderRadius: CHAT_BUBBLE_RADIUS, wordBreak: "keep-all" }}
                   >
                     <LinkifyText text={msg.text} onLinkClick={(kw) => {
                       if (kw.includes("뚜흐느솔로")) setPlacePopup(true);
@@ -539,8 +539,8 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 }}
               >
                 {/* 플레이스 이미지 */}
-                <div className="w-full h-[140px] overflow-hidden">
-                  <img src="/cafe-exterior.svg" alt="뚜흐느솔로" className="w-full h-full object-cover" />
+                <div className="w-full h-[240px] overflow-hidden">
+                  <img src="/cafe-exterior.jpg" alt="뚜흐느솔로" className="w-full h-full object-cover" />
                 </div>
 
                 {/* 플레이스 정보 */}
@@ -548,19 +548,18 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                   <p className={`text-[18px] font-bold leading-tight ${darkMode ? "text-white" : "text-[#191919]"}`}>
                     뚜흐느솔로
                   </p>
-                  <p className={`text-[13px] mt-1 ${darkMode ? "text-gray-400" : "text-[#767676]"}`}>
-                    카페 · 성수동2가
-                  </p>
-                  <div className="flex items-center gap-1 mt-1.5">
-                    <span className="text-[13px] font-semibold text-[#FFB800]">★ 4.7</span>
-                    <span className={`text-[12px] ${darkMode ? "text-gray-500" : "text-[#999]"}`}>리뷰 328</span>
+                  <div className="flex items-center gap-0.5 mt-1">
+                    <span className="text-[13px] font-semibold" style={{ marginRight: 2 }}><span className="text-red-500">★</span> <span className={darkMode ? "text-white" : "text-[#191919]"}>4.7</span></span>
+                    <span className={`text-[13px] ${darkMode ? "text-gray-300" : "text-[#555]"}`}>리뷰 328</span>
+                    <span className={`text-[13px] ${darkMode ? "text-gray-300" : "text-[#555]"}`}>·</span>
+                    <span className={`text-[13px] ${darkMode ? "text-gray-300" : "text-[#555]"}`}>카페 · 성수동2가</span>
                   </div>
                 </div>
 
                 {/* 추천 사유 */}
                 <div className={`flex items-start gap-2 px-5 pb-4 text-[13px] leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-700"}`}>
-                  <img src="/voice-effect.png" alt="어시스턴트" className="w-[32px] h-[32px] rounded-full flex-shrink-0 mt-0.5 animate-flip-y" />
                   <span>서은재님과 오늘 3시에 약속한 카페예요. 성수역 3번 출구에서 도보 5분 거리에 있어요.</span>
+                  <img src="/voice-effect.png" alt="어시스턴트" className="w-[32px] h-[32px] rounded-full flex-shrink-0 mt-0.5 animate-flip-y" />
                 </div>
 
                 {/* 버튼 */}
@@ -574,7 +573,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-white text-[#191919]"}`}
+                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-[rgba(0,0,0,0.10)] text-[#191919]"}`}
                     onClick={() => setPlacePopup(false)}
                   >
                     공유하기
