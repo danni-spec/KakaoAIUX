@@ -476,33 +476,43 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     _setInputText(val);
   }
 
-  // 채팅 메시지 추가 시 자동 스크롤
-  const scrollToBottom = useCallback((smooth = false) => {
+  // 채팅 메시지 추가 시 자동 스크롤 — 넘칠 때만 스크롤
+  const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
       const el = chatScrollRef.current;
       if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+      // 콘텐츠가 컨테이너를 넘칠 때만 스크롤 (유저 메시지 안 밀림)
+      if (el.scrollHeight > el.clientHeight) {
+        el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+      }
     });
   }, []);
 
   // 채팅 메시지 전송 + AI 응답 시뮬레이션 (질문마다 이전 대화 리셋)
   const sendChatMessage = useCallback(async (text: string) => {
     const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
+    // 1) 유저 메시지 표시 + 스켈레톤 동시 세팅
     setChatMessages([userMsg]);
     setTypingMessageId(null);
-    scrollToBottom(true);
     setAiTyping(true);
+
+    // 2) DOM 렌더 완료 후 스크롤 (2프레임 대기 — 트랜지션 시작 후)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToBottom());
+    });
 
     try {
       const [aiText] = await Promise.all([
         getAIResponse(text, [userMsg], chatRoomMessages, allChatRooms),
-        new Promise<void>((r) => setTimeout(r, 3000)),
+        new Promise<void>((r) => setTimeout(r, 1200)),
       ]);
+      // 3) 스켈레톤 → 타이핑 전환: 먼저 AI 메시지 추가
       const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
       setChatMessages((prev) => [...prev, aiMsg]);
-      setAiTyping(false);
-      setTypingMessageId(aiMsg.id);
       setTypingDisplayedLength(0);
+      setTypingMessageId(aiMsg.id);
+      // 4) 스켈레톤 약간 뒤에 제거 (타이핑 첫 글자가 보인 후 fade out)
+      setTimeout(() => setAiTyping(false), 80);
     } catch {
       setAiTyping(false);
     }
@@ -521,9 +531,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setTypingMessageId(null);
       return;
     }
+    // 자연스러운 타이핑: 25~45ms 랜덤 간격
+    const delay = 25 + Math.random() * 20;
     const t = setTimeout(() => {
       setTypingDisplayedLength((prev) => Math.min(prev + 1, fullLen));
-    }, 35);
+    }, delay);
     return () => clearTimeout(t);
   }, [typingMessageId, typingDisplayedLength, chatMessages, scrollToBottom]);
 
@@ -1243,8 +1255,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             style={{
               backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)",
               boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
-              // 초기 높이 고정 → 모드 전환 시에도 팝업 크기 불변
-              ...(popupLockedHeight && !navActive && !navArrived && !meetingMode && !wishlistView && !choonsikCardView ? {
+              // 대화 중일 때만 높이 고정 (채팅 영역 안정), 그 외에는 auto (팝업이 자연스럽게 줄어듦)
+              ...(popupLockedHeight && chatMessages.length > 0 && !navActive && !navArrived && !meetingMode && !wishlistView && !choonsikCardView ? {
                 height: popupLockedHeight,
                 display: "flex",
                 flexDirection: "column" as const,
@@ -1416,8 +1428,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               <div
                 className="flex flex-col items-center justify-center gap-1 pointer-events-none overflow-hidden"
                 style={{
-                  // flex 레이아웃: 센터 영역이 남은 공간 차지 (초기 상태) / 숨김 시 0
-                  ...(popupLockedHeight ? (centerHidden ? { flex: 0, minHeight: 0 } : { flex: 1, minHeight: 0 }) : {}),
+                  // 대화 중 flex 레이아웃: 센터 0 → 채팅이 flex:1 차지
+                  ...(popupLockedHeight && chatMessages.length > 0 ? { flex: 0, minHeight: 0 } : {}),
                   opacity: centerHidden ? 0 : 1,
                   maxHeight: centerHidden ? 0 : 400,
                   paddingTop: centerHidden ? 0 : 32,
@@ -1825,10 +1837,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       </p>
 
                       {/* Buttons */}
-                      <div className="px-4 pt-4 pb-1 flex gap-3">
+                      <div className="px-4 pt-4 pb-4 flex gap-3">
                         <button
                           type="button"
-                          className={`flex-1 h-[40px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                          className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
                           onClick={() => { resetToDefaultView(); setWishlistView(false); setGiftResult(null); setWishlistPhase("product"); doStart(); }}
                         >
@@ -1836,7 +1848,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         </button>
                         <button
                           type="button"
-                          className="flex-1 h-[40px] rounded-[40px] text-[15px] font-semibold text-black active:opacity-80 transition-colors"
+                          className="flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold text-black active:opacity-80 transition-colors"
                           style={{ background: "#FEE500" }}
                           onClick={() => {
                             setWishlistPhase("loading");
@@ -1886,7 +1898,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       <div className="mt-6 flex gap-3 w-full">
                         <button
                           type="button"
-                          className={`flex-1 h-[40px] rounded-[40px] text-[14px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                          className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }}
                           onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
                         >
@@ -1894,7 +1906,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         </button>
                         <button
                           type="button"
-                          className={`flex-1 h-[40px] rounded-[40px] text-[14px] font-semibold active:bg-[#333] transition-colors ${darkMode ? "text-black bg-[#FEE500]" : "text-white bg-[#191919]"}`}
+                          className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:bg-[#333] transition-colors ${darkMode ? "text-black bg-[#FEE500]" : "text-white bg-[#191919]"}`}
                           onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
                         >
                           확인
@@ -1904,19 +1916,17 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 </div>
               )}
 
-              {/* ── 채팅 메시지 리스트 (textMode && 메시지 있을 때) ── */}
+              {/* ── 채팅 메시지 리스트 (textMode 시 항상 마운트, 센터 접힘과 동기화) ── */}
               {textMode && !directionMode && !darkmodeView && !wishlistView && (
                 <div
-                  className="overflow-hidden transition-all duration-400"
+                  className="overflow-hidden"
                   style={{
-                    // popupLockedHeight가 있으면 flex:1로 남은 공간 차지, 없으면 maxHeight 폴백
-                    ...(popupLockedHeight ? { flex: 1, minHeight: 0 } : { maxHeight: chatMessages.length > 0 ? 320 : 0 }),
-                    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                    flex: chatMessages.length > 0 ? 1 : 0, minHeight: 0, maxHeight: chatMessages.length > 0 ? "none" : 0, transition: "flex 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
                   }}
                 >
                   <div
                     ref={chatScrollRef}
-                    className="overflow-y-auto scrollbar-hide pl-4 pr-3 pt-4 pb-2 flex flex-col"
+                    className="overflow-y-auto scrollbar-hide pl-4 pr-3 pt-4 pb-2"
                     style={{ height: "100%" }}
                   >
                   {/* 상단부터 시작: 유저 메시지 → 스켈레톤 → AI 응답 순서로 위에서 아래로 쌓임 */}
@@ -1934,41 +1944,25 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         const isTyping = msg.id === typingMessageId;
                         const fullChars = Array.from(msg.text);
                         const typedCount = isTyping ? typingDisplayedLength : fullChars.length;
-                        const typedText = fullChars.slice(0, typedCount).join("");
+                        const displayText = fullChars.slice(0, typedCount).join("");
                         const quoteMatch = msg.text.match(/💬\s*"([^"]+)"/);
                         const isTypingDone = !isTyping;
-                        const bubbleStyle: React.CSSProperties = {
-                          ...AI_RECEIVED_BUBBLE_STYLE,
-                          lineHeight: 1.65,
-                          wordBreak: "keep-all",
-                          whiteSpace: "pre-line",
-                        };
                         return (
                           <div className="flex flex-col items-start gap-2">
-                            {isTyping ? (
-                              /* 타이핑 중: 2레이어 구조
-                                 - 레이어1(hidden): 타이핑된 텍스트만 → 버블 높이 결정 (자연 성장)
-                                 - 레이어2(absolute): 전체 텍스트(typed=보임+untyped=투명) → 안정 줄바꿈 */
-                              <div
-                                className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`}
-                                style={{ ...bubbleStyle, position: "relative", overflow: "hidden" }}
-                              >
-                                {/* 레이어1: 높이 결정용 (보이지 않음) */}
-                                <span style={{ visibility: "hidden" }} aria-hidden="true">{typedText}</span>
-                                {/* 레이어2: 실제 표시 (전체 텍스트 기준 줄바꿈 고정) */}
-                                <span style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: 6, paddingBottom: 6 }}>
-                                  <span>{typedText}</span>
-                                  <span style={{ color: "transparent", userSelect: "none" }}>{fullChars.slice(typedCount).join("")}</span>
-                                </span>
-                              </div>
-                            ) : (
-                              <div
-                                className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`}
-                                style={bubbleStyle}
-                              >
-                                {renderChatWithBold(msg.text)}
-                              </div>
-                            )}
+                            <div
+                              className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`}
+                              style={{
+                                ...AI_RECEIVED_BUBBLE_STYLE,
+                                lineHeight: 1.65,
+                                // 타이핑 중: overflow-wrap: anywhere → 글자 단위 래핑 (줄바꿈 안정)
+                                // 완료 후: word-break: keep-all → 한국어 단어 단위 줄바꿈
+                                wordBreak: isTyping ? "normal" : "keep-all",
+                                overflowWrap: isTyping ? "anywhere" : "normal",
+                                whiteSpace: isTyping ? "normal" : "pre-line",
+                              }}
+                            >
+                              {isTyping ? displayText : renderChatWithBold(msg.text)}
+                            </div>
                             {quoteMatch && isTypingDone && onSendReply && (
                               <div className="flex items-center gap-2 ml-[14px]">
                                 <button
@@ -2009,7 +2003,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   {/* AI 응답 로딩 스켈레톤 — 사용자 메시지 바로 아래 */}
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
-                      <div className="py-2">
+                      <div className="py-2 ml-[12px]">
                         <img src="/voice-effect.png" alt="로딩" className="w-8 h-8 rounded-full animate-flip-y" />
                       </div>
                     </div>
@@ -2020,8 +2014,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               )}
 
               <div
-                className="px-4 pb-4 transition-all duration-[400ms]"
-                style={{ flexShrink: 0, paddingTop: (wishlistView || meetingMode) ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, paddingBottom: meetingMode ? 0 : undefined, height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                className="px-4 transition-all duration-[400ms]"
+                style={{ flexShrink: 0, paddingTop: (wishlistView || meetingMode) ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, paddingBottom: (wishlistView || meetingMode) ? 0 : textMode ? (chatMessages.length > 0 ? 8 : 16) : 16, height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
                 {!directionMode && !darkmodeView && !wishlistView && (() => {
