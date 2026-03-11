@@ -21,9 +21,6 @@ export const AI_SENT_BUBBLE_CLASS = "max-w-[92%] px-3.5 flex items-center text-[
 export const AI_RECEIVED_BUBBLE_STYLE: CSSProperties = {
   paddingTop: 6,
   paddingBottom: 6,
-  lineHeight: 2.2,
-  wordBreak: "keep-all",
-  whiteSpace: "pre-line",
 };
 
 export const AI_RECEIVED_BUBBLE_CLASS = "max-w-[85%] min-w-0 ml-[12px] text-[17px] font-normal";

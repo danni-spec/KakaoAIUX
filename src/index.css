@@ -80,9 +80,6 @@ img, svg {
     font-weight: 700 !important;
     line-height: 1;
   }
-  .leading-ai-reply {
-    line-height: 1.65 !important;
-  }
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

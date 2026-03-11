@@ -38,7 +38,12 @@ const AI_RESPONSES = [
   "맞아요, 그렇게 하시면 됩니다.",
 ];
 
-async function getAIResponse(userMessage: string, _history: ChatMessage[], chatRoomMessages?: { sender: string; text: string }[]): Promise<string> {
+async function getAIResponse(
+  userMessage: string,
+  _history: ChatMessage[],
+  chatRoomMessages?: { sender: string; text: string }[],
+  allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[],
+): Promise<string> {
   // 시뮬레이션: 1초 딜레이 후 랜덤 응답
   await new Promise((r) => setTimeout(r, 1000));
 
@@ -56,8 +61,29 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[], chatR
   if (lower.includes("고마워") || lower.includes("감사")) {
     return "천만에요! 또 필요한 게 있으면 언제든 말씀해주세요 :)";
   }
+  // 읽음처리 — 실제 채팅방 데이터 기반 응답
   if (lower.includes("읽음처리") || lower.includes("읽음 처리")) {
-    return "안읽은 메시지를 모두 읽음 처리했어요! 총 4개의 채팅방에서 12개의 메시지가 읽음 처리되었습니다.";
+    const unreadRooms = (allChatRooms || []).filter(r => r.unreadCount > 0);
+    const totalUnread = unreadRooms.reduce((sum, r) => sum + r.unreadCount, 0);
+    if (unreadRooms.length > 0) {
+      return `${unreadRooms.length}개 채팅방의 안읽은 메시지 ${totalUnread}건을 모두 읽음 처리했어요!\n${unreadRooms.map(r => `• ${r.name} — ${r.unreadCount}건`).join("\n")}`;
+    }
+    return "안읽은 메시지가 없어요! 모두 확인된 상태입니다.";
+  }
+  // 새 채팅방 만들기 — 대화 상대 미지정 시 안내
+  if (lower.includes("채팅방 만들") || lower.includes("채팅방만들")) {
+    return "새 채팅방을 만드려면 누구랑 만들지 알려줘! 예를 들어 \"이해수랑 채팅방 만들어줘\" 또는 \"김민수, 박채원 단톡방 만들어줘\"처럼 말해주면 바로 만들어줄게.";
+  }
+  // 메시지 보내기 — 본문 없이 수신자만 지정된 경우
+  const msgMatch = userMessage.match(/(.+?)에게\s*(?:메시지|문자)\s*(?:보내|전송)/);
+  if (msgMatch && !userMessage.match(/(.+?)에게\s+(.+?)(?:라고|이라고|다고)\s*(?:메시지|문자)/)) {
+    const recipient = msgMatch[1]?.trim();
+    if (recipient) {
+      return `${recipient}에게 보낼 메시지를 입력해주세요. 음성 또는 텍스트로 작성할 수 있어요. 전달할 내용을 알려주시면 최근 대화를 참고해서 자연스럽게 보내드릴게요!`;
+    }
+  }
+  if (lower.includes("궁합")) {
+    return "두 분의 궁합을 봐드릴게요!\n💛 대화 궁합 92점\n답장 속도가 비슷하고, 서로 질문과 리액션의 균형이 잘 맞아요. 특히 약속을 잡을 때 배려하는 표현이 많아서 소통 스타일이 잘 맞는 편이에요!";
   }
   if (lower.includes("대화 요약") || lower.includes("메시지 요약") || lower.includes("요약해")) {
     if (chatRoomMessages && chatRoomMessages.length > 0) {
@@ -65,6 +91,9 @@ async function getAIResponse(userMessage: string, _history: ChatMessage[], chatR
     }
     // chat-list 맥락: 전체 채팅방 요약
     return "📌 이해수 — 오늘 저녁 7시 판교 약속, 픽업 장소 변경됨\n📌 박채원 — 에르메스 립밤 추천, 샤넬 vs 디올 비교 중\n📌 서은재 — 성수동 카페 뚜흐느솔로 3시 약속\n📌 신입동기 모임방 — 토요일 모임 장소 성수 vs 을지로 투표 중";
+  }
+  if (lower.includes("성수동 핫플") || lower.includes("성수 핫플")) {
+    return "성수동 인기 장소 추천해드릴게요!\n🍽 르뱅 — 브런치 맛집, 주말 웨이팅 30분\n☕ 센터커피 — 로스터리 카페, 넓은 좌석\n🍷 을지다락 — 분위기 좋은 와인바\n인당 예산 3만원이면 르뱅이나 센터커피가 딱이에요!";
   }
   if (lower.includes("에르메스 립밤")) {
     return "에르메스 로즈 립밤은 시어버터 베이스로 촉촉하게 밀착되고, 은은한 로즈 컬러가 자연스러운 혈색을 만들어줘요. 현재 최저가는 카카오쇼핑 52,000원이에요.";
@@ -191,7 +220,8 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
   ],
   "chat-room": [
     "대화 요약해줘",
-    "다음에 뭐라고 말할까",
+    "다음에 뭐라고할까?",
+    "우리 둘 궁합은??",
   ],
   "chat-room-new": [
     "인사해줘",
@@ -203,15 +233,16 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
 
 function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string, chatProductSuggestions?: string[]): string[] {
   const base = SUGGESTIONS_BY_CONTEXT[ctx];
+  // chatProductSuggestions 우선 적용 (채팅방 맥락별 맞춤 칩)
+  if (chatProductSuggestions && chatProductSuggestions.length > 0 && (ctx === "chat-room" || ctx === "chat-room-new")) {
+    const front = base.filter((s) => !s.includes("궁합")).slice(0, chatPartnerName ? 2 : 1);
+    return [...front, ...chatProductSuggestions];
+  }
   if (ctx === "chat-room-new" && !chatPartnerName) {
     return base.map((s) => (s.includes("이해수에게") ? "단톡방에 인사해줘" : s));
   }
   if (ctx === "chat-room" && !chatPartnerName) {
-    return base.map((s) => (s.includes("이해수에게") ? "답장해줘" : s));
-  }
-  if (chatProductSuggestions && chatProductSuggestions.length > 0 && (ctx === "chat-room" || ctx === "chat-room-new")) {
-    const front = base.slice(0, 1);
-    return [...front, ...chatProductSuggestions];
+    return base.filter((s) => !s.includes("궁합")).map((s) => (s.includes("이해수에게") ? "답장해줘" : s));
   }
   return base;
 }
@@ -414,6 +445,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const [typingDisplayedLength, setTypingDisplayedLength] = useState(0);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const popupBodyRef = useRef<HTMLDivElement>(null);
+  const [popupLockedHeight, setPopupLockedHeight] = useState<number | null>(null);
   const [nearDismiss, setNearDismiss] = useState(false);
   const nearDismissRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -437,9 +470,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   }
 
   // 채팅 메시지 추가 시 자동 스크롤
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((smooth = false) => {
     requestAnimationFrame(() => {
-      chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
+      const el = chatScrollRef.current;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" });
     });
   }, []);
 
@@ -448,12 +483,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
     setChatMessages([userMsg]);
     setTypingMessageId(null);
-    scrollToBottom();
+    scrollToBottom(true);
     setAiTyping(true);
 
     try {
       const [aiText] = await Promise.all([
-        getAIResponse(text, [userMsg], chatRoomMessages),
+        getAIResponse(text, [userMsg], chatRoomMessages, allChatRooms),
         new Promise<void>((r) => setTimeout(r, 3000)),
       ]);
       const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
@@ -464,7 +499,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     } catch {
       setAiTyping(false);
     }
-  }, [scrollToBottom, chatRoomMessages]);
+  }, [scrollToBottom, chatRoomMessages, allChatRooms]);
 
   // AI 응답 타이핑 효과 (서로게이트 페어/이모지 안전)
   useEffect(() => {
@@ -473,6 +508,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     if (!msg) return;
     const chars = Array.from(msg.text);
     const fullLen = chars.length;
+    // 타이핑 중에는 항상 최하단 고정 (instant)
     scrollToBottom();
     if (typingDisplayedLength >= fullLen) {
       setTypingMessageId(null);
@@ -633,6 +669,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }, 1200);
   }
 
+  // ── 액션 타입 분류 ──
+  // Conversational Type: 사용자 말풍선 → 스켈레톤 로딩 → AI 타이핑 응답
+  //   (chat-summary, next-reply, create-chatroom(멤버없음), mark-read, message(본문없음), 일반 텍스트)
+  // Direct Action Type: 즉시 시스템 동작 (UI 전환), 채팅 없음
+  //   (gift, darkmode, navigation, choonsik-card, create-chatroom(멤버있음))
+
   function handleTextSend() {
     if (textSendLockRef.current) return;
     const text = (inputTextRef.current || inputText).trim();
@@ -646,9 +688,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
     const action = matchCommand(text);
     updateInputText("");
-    if (action === "chat-summary") {
-      sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
-    } else if (action === "gift") {
+
+    // ── Direct Action Type: 즉시 시스템 동작 ──
+    if (action === "gift") {
       setTextSending(true);
       inputRef.current?.blur();
       loadingTimerRef.current = setTimeout(() => {
@@ -701,12 +743,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         doStop();
         setSummaryResult(null);
         setChoonsikCardView(true);
-        // choonsikFullscreen 제거됨
         textSendLockRef.current = false;
       }, 1500);
     } else if (action === "create-chatroom") {
       const { members, message } = extractChatRequest(text);
       if (members.length > 0 && onCreateChatRoom) {
+        // Direct Action: 멤버 지정됨 → 바로 채팅방 생성
         inputRef.current?.blur();
         setTextSending(true);
         loadingTimerRef.current = setTimeout(() => {
@@ -718,56 +760,21 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           textSendLockRef.current = false;
         }, 1500);
       } else {
-        // 대화 상대 미지정 → AI 안내 메시지
-        const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
-        setChatMessages([userMsg]);
-        setTextMode(true);
-        setTypingMessageId(null);
-        scrollToBottom();
-        setAiTyping(true);
-        loadingTimerRef.current = setTimeout(() => {
-          const aiMsg: ChatMessage = {
-            id: `a-${Date.now()}`,
-            role: "ai",
-            text: "새 채팅방을 만드려면 누구랑 만들지 알려줘! 예를 들어 \"이해수랑 채팅방 만들어줘\" 또는 \"김민수, 박채원 단톡방 만들어줘\"처럼 말해주면 바로 만들어줄게.",
-            timestamp: Date.now(),
-          };
-          setChatMessages((prev) => [...prev, aiMsg]);
-          setAiTyping(false);
-          setTypingMessageId(aiMsg.id);
-          setTypingDisplayedLength(0);
-        }, 2000);
-        textSendLockRef.current = false;
+        // Conversational: 멤버 미지정 → AI 안내
+        sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
       }
     } else if (action === "message") {
       fillMessageDraft(text);
       textSendLockRef.current = false;
+
+    // ── Conversational Type: 사용자 말풍선 → 스켈레톤 → AI 타이핑 ──
     } else if (action === "mark-read") {
-      // 실제 데이터 기반 응답 생성 (읽음처리 전에 캡쳐)
-      const unreadRooms = (allChatRooms || []).filter(r => r.unreadCount > 0);
-      const totalUnread = unreadRooms.reduce((sum, r) => sum + r.unreadCount, 0);
-      const aiText = unreadRooms.length > 0
-        ? `${unreadRooms.length}개 채팅방의 안읽은 메시지 ${totalUnread}건을 모두 읽음 처리했어요!\n${unreadRooms.map(r => `• ${r.name} — ${r.unreadCount}건`).join("\n")}`
-        : "안읽은 메시지가 없어요! 모두 확인된 상태입니다.";
-      const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
-      setChatMessages([userMsg]);
-      setTextMode(true);
-      setTypingMessageId(null);
-      scrollToBottom();
-      setAiTyping(true);
-      loadingTimerRef.current = setTimeout(() => {
-        if (onMarkAllRead) onMarkAllRead();
-        const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
-        setChatMessages((prev) => [...prev, aiMsg]);
-        setAiTyping(false);
-        setTypingMessageId(aiMsg.id);
-        setTypingDisplayedLength(0);
-        textSendLockRef.current = false;
-      }, 2000);
-    } else if (action === "next-reply") {
-      sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
+      // 읽음처리 전에 sendChatMessage 호출 (allChatRooms 스냅샷이 getAIResponse로 전달됨)
+      sendChatMessage(text).then(() => {
+        onMarkAllRead?.();
+      }).finally(() => { textSendLockRef.current = false; });
     } else {
-      // 명령어 미매칭 → 채팅 모드로 AI 대화
+      // chat-summary, next-reply, 일반 텍스트 → 모두 동일한 대화형 플로우
       sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
     }
   }
@@ -797,30 +804,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setStatusMessage(null);
       doStart();
     } else {
-      // 내용 없으면 AI 안내 메시지를 채팅으로 보여줌
+      // 내용 없으면 Conversational 플로우 → AI 안내 후 replyMode 진입
       doStop();
       setTranscript("");
       setInterimText("");
       setStatusMessage(null);
-      const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text: voiceText, timestamp: Date.now() };
-      setChatMessages([userMsg]);
-      setTextMode(true);
-      setTypingMessageId(null);
-      scrollToBottom();
-      setAiTyping(true);
-      loadingTimerRef.current = setTimeout(() => {
-        const aiMsg: ChatMessage = {
-          id: `a-${Date.now()}`,
-          role: "ai",
-          text: `${recipient}에게 보낼 메시지를 입력해주세요. 음성 또는 텍스트로 작성할 수 있어요. 전달할 내용을 알려주시면 최근 대화를 참고해서 자연스럽게 보내드릴게요!`,
-          timestamp: Date.now(),
-        };
-        setChatMessages((prev) => [...prev, aiMsg]);
-        setAiTyping(false);
-        setTypingMessageId(aiMsg.id);
-        setTypingDisplayedLength(0);
+      sendChatMessage(voiceText).then(() => {
         updateReplyMode(true);
-      }, 2000);
+      });
     }
   }
 
@@ -1025,6 +1016,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setWishlistPhase("product");
       exitMeetingMode();
       updateInputText("");
+      setPopupLockedHeight(null);
       return;
     }
     if (textMode || directionMode || darkmodeView || wishlistView || meetingMode) {
@@ -1038,6 +1030,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, textMode, directionMode, darkmodeView, wishlistView, meetingMode]);
+
+  // 팝업 초기 높이 캡처 → 이후 모든 모드에서 동일 높이 유지
+  useEffect(() => {
+    if (isOpen && !popupLockedHeight && popupBodyRef.current) {
+      const rAF = requestAnimationFrame(() => {
+        if (popupBodyRef.current) {
+          setPopupLockedHeight(popupBodyRef.current.offsetHeight);
+        }
+      });
+      return () => cancelAnimationFrame(rAF);
+    }
+  }, [isOpen, popupLockedHeight]);
 
   const draggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -1227,8 +1231,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
           {/* ── 카드 본체 ── */}
           <div
+            ref={popupBodyRef}
             className={`relative rounded-[30px] overflow-hidden transition-[background-color,box-shadow] duration-500 backdrop-blur-[4px] ${navActive || navArrived ? "h-full" : ""}`}
-            style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)" }}
+            style={{
+              backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)",
+              boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
+              // 초기 높이 고정 → 모드 전환 시에도 팝업 크기 불변
+              ...(popupLockedHeight && !navActive && !navArrived && !meetingMode && !wishlistView && !choonsikCardView ? {
+                height: popupLockedHeight,
+                display: "flex",
+                flexDirection: "column" as const,
+              } : {}),
+            }}
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
@@ -1351,7 +1365,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               )}
               {/* ── 위시리스트 캐로셀 (giftResult, textMode에서 카드 상단에 표시) ── */}
               {giftResult && textMode && (
-                <div className="w-full px-4 pt-4 pb-2 pointer-events-auto">
+                <div className="w-full px-4 pt-4 pb-2 pointer-events-auto" style={{ flexShrink: 0 }}>
                   <div className="flex items-center gap-2.5 mb-3">
                     <SquircleAvatar src="/profile-ieun.png" alt={giftResult} className="w-8 h-8" />
                     <p className={`text-[14px] font-bold leading-tight ${darkMode ? "text-gray-100" : "text-gray-900"}`}>{giftResult}의 위시리스트 🎁</p>
@@ -1395,6 +1409,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               <div
                 className="flex flex-col items-center justify-center gap-1 pointer-events-none overflow-hidden"
                 style={{
+                  // flex 레이아웃: 센터 영역이 남은 공간 차지 (초기 상태) / 숨김 시 0
+                  ...(popupLockedHeight ? (centerHidden ? { flex: 0, minHeight: 0 } : { flex: 1, minHeight: 0 }) : {}),
                   opacity: centerHidden ? 0 : 1,
                   maxHeight: centerHidden ? 0 : 400,
                   paddingTop: centerHidden ? 0 : 32,
@@ -1417,7 +1433,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                             {msg.text}
                           </div>
                         ) : (
-                          <div className={`${AI_RECEIVED_BUBBLE_CLASS} leading-ai-reply ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={AI_RECEIVED_BUBBLE_STYLE}>
+                          <div className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={{ ...AI_RECEIVED_BUBBLE_STYLE, lineHeight: 1.65, wordBreak: "keep-all", whiteSpace: "pre-line" }}>
                             {msg.id === "sum-a-1" ? (
                               <>오늘 저녁 7시에 판교에서 만나기로 함. <span className="font-semibold">판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함</span>. 해수가 회사 일이 늦게 끝나서 판교역 대신 사무실 앞으로 픽업하기로 함.</>
                             ) : (
@@ -1886,15 +1902,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 <div
                   className="overflow-hidden transition-all duration-400"
                   style={{
-                    maxHeight: chatMessages.length > 0 ? 240 : 0,
+                    // popupLockedHeight가 있으면 flex:1로 남은 공간 차지, 없으면 maxHeight 폴백
+                    ...(popupLockedHeight ? { flex: 1, minHeight: 0 } : { maxHeight: chatMessages.length > 0 ? 320 : 0 }),
                     transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
                   }}
                 >
                   <div
                     ref={chatScrollRef}
-                    className="overflow-y-auto scrollbar-hide pl-4 pr-3 pt-4 pb-2"
-                    style={{ height: 240 }}
+                    className="overflow-y-auto scrollbar-hide pl-4 pr-3 pt-4 pb-2 flex flex-col"
+                    style={{ height: "100%" }}
                   >
+                  {/* 상단부터 시작: 유저 메시지 → 스켈레톤 → AI 응답 순서로 위에서 아래로 쌓임 */}
+                  <div className="flex flex-col justify-start">
                   {chatMessages.map((msg) => (
                     <div
                       key={msg.id}
@@ -1905,17 +1924,44 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           {msg.text}
                         </div>
                       ) : (() => {
-                        const displayText = msg.id === typingMessageId ? Array.from(msg.text).slice(0, typingDisplayedLength).join("") : msg.text;
+                        const isTyping = msg.id === typingMessageId;
+                        const fullChars = Array.from(msg.text);
+                        const typedCount = isTyping ? typingDisplayedLength : fullChars.length;
+                        const typedText = fullChars.slice(0, typedCount).join("");
                         const quoteMatch = msg.text.match(/💬\s*"([^"]+)"/);
-                        const isTypingDone = msg.id !== typingMessageId;
+                        const isTypingDone = !isTyping;
+                        const bubbleStyle: React.CSSProperties = {
+                          ...AI_RECEIVED_BUBBLE_STYLE,
+                          lineHeight: 1.65,
+                          wordBreak: "keep-all",
+                          whiteSpace: "pre-line",
+                        };
                         return (
                           <div className="flex flex-col items-start gap-2">
-                            <div className={`${AI_RECEIVED_BUBBLE_CLASS} leading-ai-reply ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={{ ...AI_RECEIVED_BUBBLE_STYLE, position: "relative" }}>
-                              {/* 풀 텍스트로 버블 크기 고정 (투명) */}
-                              <span style={{ visibility: "hidden" }} aria-hidden="true">{renderChatWithBold(msg.text)}</span>
-                              {/* 타이핑 중인 텍스트 오버레이 */}
-                              <span style={{ position: "absolute", inset: 0, paddingTop: 6, paddingBottom: 6 }}>{renderChatWithBold(displayText)}</span>
-                            </div>
+                            {isTyping ? (
+                              /* 타이핑 중: 2레이어 구조
+                                 - 레이어1(hidden): 타이핑된 텍스트만 → 버블 높이 결정 (자연 성장)
+                                 - 레이어2(absolute): 전체 텍스트(typed=보임+untyped=투명) → 안정 줄바꿈 */
+                              <div
+                                className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`}
+                                style={{ ...bubbleStyle, position: "relative", overflow: "hidden" }}
+                              >
+                                {/* 레이어1: 높이 결정용 (보이지 않음) */}
+                                <span style={{ visibility: "hidden" }} aria-hidden="true">{typedText}</span>
+                                {/* 레이어2: 실제 표시 (전체 텍스트 기준 줄바꿈 고정) */}
+                                <span style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: 6, paddingBottom: 6 }}>
+                                  <span>{typedText}</span>
+                                  <span style={{ color: "transparent", userSelect: "none" }}>{fullChars.slice(typedCount).join("")}</span>
+                                </span>
+                              </div>
+                            ) : (
+                              <div
+                                className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`}
+                                style={bubbleStyle}
+                              >
+                                {renderChatWithBold(msg.text)}
+                              </div>
+                            )}
                             {quoteMatch && isTypingDone && onSendReply && (
                               <div className="flex items-center gap-2 ml-[14px]">
                                 <button
@@ -1939,7 +1985,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                                   style={{ border: "1px solid rgba(0,0,0,0.08)" }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    sendChatMessage("다음에 뭐라고 말할까");
+                                    sendChatMessage("다음에 뭐라고할까?");
                                   }}
                                 >
                                   <svg className={`w-[18px] h-[18px] ${darkMode ? "text-white" : "text-[#191919]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1953,7 +1999,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       })()}
                     </div>
                   ))}
-                  {/* AI 응답 로딩 */}
+                  {/* AI 응답 로딩 스켈레톤 — 사용자 메시지 바로 아래 */}
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
                       <div className="py-2">
@@ -1962,12 +2008,13 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     </div>
                   )}
                   </div>
+                  </div>
                 </div>
               )}
 
               <div
                 className="px-4 pb-4 transition-all duration-[400ms]"
-                style={{ paddingTop: (wishlistView || meetingMode) ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, paddingBottom: meetingMode ? 0 : undefined, height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ flexShrink: 0, paddingTop: (wishlistView || meetingMode) ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, paddingBottom: meetingMode ? 0 : undefined, height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
                 {!directionMode && !darkmodeView && !wishlistView && (() => {

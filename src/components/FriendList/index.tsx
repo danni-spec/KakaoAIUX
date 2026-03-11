@@ -387,7 +387,9 @@ export function FriendList() {
         chatProductSuggestions={
           activeChatRoom?.name === "박채원"
             ? ["에르메스 립밤", "샤넬 립스틱", "디올 립글로우"]
-            : undefined
+            : activeChatRoom?.name === "카카오 신입동기 모임방"
+              ? ["성수동 핫플"]
+              : undefined
         }
         chatRoomMessages={activeChatRoom?.messages.map(m => ({ sender: m.sender, text: m.text }))}
         onSendReply={activeChatRoomId ? (text) => chatRoomActions.sendMessage(activeChatRoomId, text) : undefined}

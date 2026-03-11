@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+  <rect width="400" height="200" fill="#e8d5c4"/>
+  <rect x="120" y="60" width="160" height="120" rx="8" fill="#c4a882"/>
+  <rect x="140" y="80" width="50" height="60" rx="4" fill="#8b7355" opacity="0.6"/>
+  <rect x="210" y="80" width="50" height="60" rx="4" fill="#8b7355" opacity="0.6"/>
+  <rect x="175" y="120" width="50" height="60" rx="4" fill="#6b5a3e"/>
+  <text x="200" y="45" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="16" fill="#5a4a3a">TOUT LE MONDE SOLO</text>
+</svg>
