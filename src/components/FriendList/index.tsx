@@ -10,10 +10,7 @@ import { FavoriteFriendsSection } from "./FavoriteFriendsSection";
 import { AllFriendsSection } from "./AllFriendsSection";
 import { BottomNavBar } from "./BottomNavBar";
 import { AILayerPopup } from "./AILayerPopup";
-import { DarkModeOverlay } from "./DarkModeOverlay";
-import { MapLayerOverlay } from "./MapLayerOverlay";
 import { NotificationBanner } from "./NotificationBanner";
-import { BirthdayGiftPopup } from "./BirthdayGiftPopup";
 import { ChatRoomList } from "./ChatRoomList";
 import { ChatRoomDetail } from "./ChatRoomDetail";
 import { useChatRooms } from "../../contexts/ChatRoomContext";
@@ -83,7 +80,6 @@ export function FriendList() {
   const { activeChatRoomId, activeChatRoom, chatRooms } = chatRoomActions;
   const totalUnread = chatRooms.reduce((sum, r) => sum + r.unreadCount, 0);
   const [aiPopupOpen, setAiPopupOpen] = useState(false);
-  const [darkModeOverlayOpen, setDarkModeOverlayOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("darkMode");
     if (saved !== null) return saved === "true";
@@ -97,10 +93,6 @@ export function FriendList() {
   }, [darkMode]);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [showNotificationList, setShowNotificationList] = useState(false);
-  const [mapLayerOpen, setMapLayerOpen] = useState(false);
-  const mapDestination = "";
-  const [giftPopupOpen, setGiftPopupOpen] = useState(false);
-  const giftPopupFriend = { name: "", photo: "" };
   const aiInputRef = useRef<HTMLInputElement>(null);
   const circlePointsRef = useRef<{ x: number; y: number }[]>([]);
   const circleFiredRef = useRef(false);
@@ -393,6 +385,7 @@ export function FriendList() {
         }
         chatRoomMessages={activeChatRoom?.messages.map(m => ({ sender: m.sender, text: m.text }))}
         onSendReply={activeChatRoomId ? (text) => chatRoomActions.sendMessage(activeChatRoomId, text) : undefined}
+        onSendToMyChat={(text) => chatRoomActions.sendMessage("room-my", text)}
         allChatRooms={chatRoomActions.chatRooms.map(r => ({ name: r.name, unreadCount: r.unreadCount, lastMessage: r.lastMessage }))}
         onMarkAllRead={chatRoomActions.markAllRead}
         showNotificationList={showNotificationList}
@@ -410,27 +403,6 @@ export function FriendList() {
           }
           setGnbTab(1);
         }}
-      />
-      <DarkModeOverlay
-        isOpen={darkModeOverlayOpen}
-        onClose={() => setDarkModeOverlayOpen(false)}
-        darkMode={darkMode}
-        onToggle={setDarkMode}
-        onOpenAI={() => {
-          setDarkModeOverlayOpen(false);
-          openAIPopup();
-        }}
-      />
-      <MapLayerOverlay
-        isOpen={mapLayerOpen}
-        onClose={() => setMapLayerOpen(false)}
-        destination={mapDestination}
-      />
-      <BirthdayGiftPopup
-        isOpen={giftPopupOpen}
-        onClose={() => setGiftPopupOpen(false)}
-        friendName={giftPopupFriend.name}
-        friendPhoto={giftPopupFriend.photo}
       />
     </div>
   );

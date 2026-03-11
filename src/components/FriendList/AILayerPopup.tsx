@@ -27,17 +27,6 @@ interface ChatMessage {
 //     const data = await res.json();
 //     return data.choices[0].message.content;
 //   }
-const AI_RESPONSES = [
-  "안녕하세요! 무엇이든 물어보세요 :)",
-  "좋은 질문이에요! 조금 더 자세히 말씀해주시면 더 잘 도와드릴 수 있어요.",
-  "네, 알겠습니다. 도와드릴게요!",
-  "흥미로운 질문이네요. 제가 알기로는...",
-  "카카오톡에서 다양한 기능을 활용해보세요!",
-  "더 궁금한 점이 있으시면 편하게 물어보세요.",
-  "확인해 볼게요. 잠시만 기다려주세요!",
-  "맞아요, 그렇게 하시면 됩니다.",
-];
-
 async function getAIResponse(
   userMessage: string,
   _history: ChatMessage[],
@@ -117,7 +106,7 @@ async function getAIResponse(
     return "대화 내용이 없어서 추천이 어려워요. 채팅방에서 다시 시도해주세요!";
   }
 
-  return AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)];
+  return "좋은 질문이에요! 조금 더 자세히 말씀해주시면 더 잘 도와드릴 수 있어요.";
 }
 
 function generateChatSummary(messages: { sender: string; text: string }[]): string {
@@ -206,6 +195,7 @@ interface AILayerPopupProps {
   chatProductSuggestions?: string[]; // 채팅방 내 추천 상품 (서제스트 칩 3번째부터 삽입)
   chatRoomMessages?: { sender: string; text: string }[]; // 현재 채팅방 메시지 (대화 요약용)
   onSendReply?: (text: string) => void; // 추천 답장을 채팅방에 전송
+  onSendToMyChat?: (text: string) => void; // 나와의 채팅방에 메시지 전송
   allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[]; // 전체 채팅방 (읽음처리용)
   onMarkAllRead?: () => void; // 전체 읽음처리
   showNotificationList?: boolean; // 알림 아이콘 클릭 시 알림 리스트 뷰 표시
@@ -216,13 +206,14 @@ interface AILayerPopupProps {
 const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
   friend: [
     "다크모드 켜줘",
-    "이해수에게 메시지 보내",
+    "사원증",
     "생일 친구 선물 추천",
+    "이해수에게 메시지 보내",
     "판교역 가는 길",
   ],
   "chat-list": [
     "새 채팅방 만들어줘",
-    "최근 대화 요약해줘",
+    "안읽은 대화 전체 요약해줘",
     "안읽은 메시지 읽음처리하기",
     "다크모드 켜줘",
   ],
@@ -230,6 +221,7 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
     "대화 요약해줘",
     "다음에 뭐라고할까?",
     "우리 둘 궁합은??",
+    "추억 영상 만들기",
   ],
   "chat-room-new": [
     "첫 인사말 추천해줘",
@@ -374,20 +366,22 @@ function extractDestination(text: string): string {
 }
 
 const LOADING_MSGS = ["카카오페이와 연결 중입니다.", "결제 처리 중..."];
+const MEETING_LOADING_MSGS = ["음성을 텍스트로 변환 중...", "STT 요약 정리 중..."];
 
-function LoadingMessages({ dark }: { dark?: boolean }) {
+function LoadingMessages({ dark, messages }: { dark?: boolean; messages?: string[] }) {
+  const msgs = messages || LOADING_MSGS;
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => {
-      setIdx((prev) => (prev === 0 ? 1 : 0));
+      setIdx((prev) => (prev + 1) % msgs.length);
     }, 1200);
     return () => clearInterval(timer);
-  }, []);
+  }, [msgs.length]);
   return (
     <div className="flex flex-col items-center justify-center py-16">
       <img src="/voice-effect.png" alt="로딩" className="w-10 h-10 rounded-full animate-flip-y" />
       <p className={`text-[15px] font-medium mt-4 ${dark ? "text-gray-200" : "text-[#191919]"}`}>
-        {LOADING_MSGS[idx]}
+        {msgs[idx]}
       </p>
     </div>
   );
@@ -401,7 +395,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
 
   // 멤버 이름 추출
   const cleaned = text
-    .replace(/채팅방|톡방|단톡방|대화방|만들어줘|만들어|생성해줘|생성|만들기|해줘/g, "")
+    .replace(/새\s*|채팅방|톡방|단톡방|대화방|만들어줘|만들어|생성해줘|생성|만들기|해줘/g, "")
     .replace(message, "")
     .trim();
   // 구분자: 와, 과, 이랑, 하고, 랑, 쉼표, 공백+
@@ -412,15 +406,15 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, allChatRooms, onMarkAllRead, showNotificationList: _sn = false, onNotificationListClose: _snClose }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: _sn = false, onNotificationListClose: _snClose }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
-  const [, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimText, setInterimText] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [inputText, _setInputText] = useState("");
   const [textSending, setTextSending] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null); // 사원증 등 액션별 로딩 텍스트
   const [sendStatus, setSendStatus] = useState<string | null>(null);
   const [summaryResult, setSummaryResult] = useState<ChatMessage[] | null>(null);
   const [giftResult, setGiftResult] = useState<string | null>(null);
@@ -433,6 +427,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [meetingRecording, setMeetingRecording] = useState(false);
   const [meetingPaused, setMeetingPaused] = useState(false);
   const [meetingSaved, setMeetingSaved] = useState(false);
+  const [meetingSending, setMeetingSending] = useState(false);
   const [meetingElapsed, setMeetingElapsed] = useState(0);
   const meetingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [directionMode, setDirectionMode] = useState(false);
@@ -443,7 +438,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [navArrived, setNavArrived] = useState(false);
   const [darkmodeView, setDarkmodeView] = useState(false);
   const [choonsikCardView, setChoonsikCardView] = useState(false);
-  const [, setChoonsikFullscreen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
@@ -491,6 +485,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   // 채팅 메시지 전송 + AI 응답 시뮬레이션 (질문마다 이전 대화 리셋)
   const sendChatMessage = useCallback(async (text: string) => {
     const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
+    // 0) 텍스트 모드 활성화 (서제스트 칩 → 대화형 전환 보장)
+    setTextMode(true);
     // 1) 유저 메시지 표시 + 스켈레톤 동시 세팅
     setChatMessages([userMsg]);
     setTypingMessageId(null);
@@ -645,6 +641,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     resetToDefaultView();
   }
 
+  // 모든 모드별 상태를 초기 음성 모드로 되돌림
   function resetToDefaultView() {
     setChatMessages([]);
     setTextMode(false);
@@ -755,8 +752,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       }, 1500);
     } else if (action === "choonsik-card") {
       inputRef.current?.blur();
+      setLoadingMessage("사원증을 불러오는 중");
       setTextSending(true);
       loadingTimerRef.current = setTimeout(() => {
+        setLoadingMessage(null);
         setTextSending(false);
         setTextMode(false);
         doStop();
@@ -856,7 +855,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     if (action) {
       // 명령 매칭 → 로딩 스피너 전환
       setIsLoading(true);
-      setStatusMessage("처리 중...");
+      setStatusMessage(action === "choonsik-card" ? "사원증을 불러오는 중" : "처리 중...");
       // 1.5초 후 → 액션 처리
       loadingTimerRef.current = setTimeout(() => {
         setIsLoading(false);
@@ -929,6 +928,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
   }
 
+  // 음성 인식 중단 — 모든 이벤트 핸들러 해제 후 abort
   function doStop() {
     activeRef.current = false;
     const rec = recognitionRef.current;
@@ -939,9 +939,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       try { rec.abort(); } catch { /* noop */ }
       recognitionRef.current = null;
     }
-    setListening(false);
   }
 
+  // 음성 인식 시작 — 기존 세션 중단 후 새 인식기 생성 및 이벤트 바인딩
   function doStart() {
     doStop();
     const rec = createRecognition();
@@ -979,19 +979,16 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         }, 100);
         return;
       }
-      setListening(false);
     };
 
     rec.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         activeRef.current = false;
-        setListening(false);
       }
     };
 
     try {
       rec.start();
-      setListening(true);
     } catch { /* noop */ }
   }
 
@@ -1030,7 +1027,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setNavArrived(false);
       setDarkmodeView(false);
       setChoonsikCardView(false);
-      setChoonsikFullscreen(false);
       setWishlistView(false);
       setWishlistPhase("product");
       exitMeetingMode();
@@ -1062,6 +1058,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
   }, [isOpen, popupLockedHeight]);
 
+  // 미니 플로팅 버튼 드래그 관련 상태
   const draggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1167,6 +1164,24 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     doStop();
     onClose();
   };
+
+  // 하단 입력/칩 영역의 paddingTop 계산 (모드별 분기)
+  function getBottomPaddingTop(): number {
+    if (wishlistView || meetingMode) return 0;
+    if (directionMode) return 380;
+    if (darkmodeView) return 156;
+    if (giftResult && textMode) return 0;
+    if (textMode) return chatMessages.length > 0 ? 4 : 16;
+    if (choonsikCardView) return 8;
+    return 0;
+  }
+
+  // 하단 입력/칩 영역의 paddingBottom 계산 (모드별 분기)
+  function getBottomPaddingBottom(): number {
+    if (wishlistView || meetingMode) return 0;
+    if (textMode) return chatMessages.length > 0 ? 8 : 16;
+    return 16;
+  }
 
   return (
     <div
@@ -1296,7 +1311,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       </svg>
                     </button>
                   )}
-                  {meetingSaved ? (
+                  {meetingSending ? (
+                    <LoadingMessages dark={darkMode} messages={MEETING_LOADING_MSGS} />
+                  ) : meetingSaved ? (
                     <>
                       {/* 저장 완료 아이콘 */}
                       <div className="w-14 h-14 rounded-full bg-[#FEE500] mb-5 flex items-center justify-center">
@@ -1311,7 +1328,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       <p className={`text-[14px] text-center ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
                         톡클라우드에서 확인이 가능합니다
                       </p>
-                      {/* 확인 버튼 */}
+                      {/* 확인 + 채팅방으로 보내기 버튼 */}
                       <div className="flex gap-3 mt-8 w-full">
                         <button
                           type="button"
@@ -1320,6 +1337,27 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           onClick={() => exitMeetingMode()}
                         >
                           확인
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-black" : "text-white"}`}
+                          style={{ background: darkMode ? "#FEE500" : "#191919" }}
+                          onClick={() => {
+                            setMeetingSending(true);
+                            const elapsed = meetingElapsed;
+                            const mm = Math.floor(elapsed / 60).toString().padStart(2, "0");
+                            const ss = (elapsed % 60).toString().padStart(2, "0");
+                            setTimeout(() => {
+                              const sttText = "오늘 회의에서 논의된 주요 안건은 다음과 같습니다.\n\n1. 2분기 프로젝트 일정 확인\n2. 디자인 리뷰 피드백 반영\n3. 다음 주 목요일 중간 발표 준비";
+                              if (onSendToMyChat) {
+                                onSendToMyChat(`🎙 음성 녹음 ${mm}:${ss}\n\n📝 STT 요약\n${sttText}`);
+                              }
+                              setMeetingSending(false);
+                              exitMeetingMode();
+                            }, 3000);
+                          }}
+                        >
+                          나챗방으로 보내기
                         </button>
                       </div>
                     </>
@@ -1407,7 +1445,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               )}
               {/* ── 춘식이 사원증 카드 (normal flow, 레이어 높이 유연 확장) ── */}
               {choonsikCardView && !textMode && (
-                <div className="flex items-center justify-center w-full pointer-events-auto px-4" style={{ paddingTop: 56, paddingBottom: 48 }}>
+                <div className="flex items-center justify-center w-full pointer-events-auto px-4" style={{ paddingTop: 72, paddingBottom: 48 }}>
                   <img
                     src="/card-choonsik.png"
                     alt="춘식이"
@@ -1482,7 +1520,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#1C1C1E") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#ffffff" : "#374151") }}
                 >
                   {isLoading
-                    ? "처리 중..."
+                    ? (statusMessage || "처리 중...")
                     : statusMessage
                       ? statusMessage
                       : transcript || interimText
@@ -2015,7 +2053,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               <div
                 className="px-4 transition-all duration-[400ms]"
-                style={{ flexShrink: 0, paddingTop: (wishlistView || meetingMode) ? 0 : directionMode ? 380 : darkmodeView ? 156 : giftResult && textMode ? 0 : textMode ? (chatMessages.length > 0 ? 4 : 16) : choonsikCardView ? 8 : 0, paddingBottom: (wishlistView || meetingMode) ? 0 : textMode ? (chatMessages.length > 0 ? 8 : 16) : 16, height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                style={{ flexShrink: 0, paddingTop: getBottomPaddingTop(), paddingBottom: getBottomPaddingBottom(), height: (wishlistView || meetingMode) ? 0 : "auto", overflow: (wishlistView || meetingMode) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
                 {!directionMode && !darkmodeView && !wishlistView && (() => {
@@ -2112,7 +2150,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       autoComplete="off"
                       autoCapitalize="off"
                       value={inputText}
-                      placeholder={sendStatus ? sendStatus : textSending ? "처리 중..." : giftResult ? `${giftResult}에게 선물 메시지 보내기` : replyMode ? "이해수에게 답장" : "카나나에게 요청하기"}
+                      placeholder={sendStatus ? sendStatus : textSending ? (loadingMessage || "처리 중...") : giftResult ? `${giftResult}에게 선물 메시지 보내기` : replyMode ? "이해수에게 답장" : "카나나에게 요청하기"}
                       className={`w-full text-base outline-none bg-transparent ${darkMode ? "text-gray-100" : "text-gray-900"} ${sendStatus ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : textSending ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : (darkMode ? "placeholder:text-gray-400" : "placeholder:text-gray-900/40")}`}
                       style={{ fontSize: "16px" }}
                       disabled={textSending || !!sendStatus}

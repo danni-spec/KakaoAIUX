@@ -69,6 +69,22 @@ function calcIncrementalAngle(
   return prevAngle + delta;
 }
 
+// ── 팝업 공유 스타일 ──
+const POPUP_POSITION_STYLE: React.CSSProperties = {
+  left: 16,
+  right: 16,
+  bottom: 16,
+  transition: "bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease",
+};
+
+const GLOW_GRADIENT_BG =
+  "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)";
+
+const cardBoxShadow = (darkMode: boolean) =>
+  darkMode
+    ? "inset 0 0 0 1px rgba(255,255,255,0.12)"
+    : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)";
+
 // ── 상품 데이터 ──
 const PRODUCT_DATA = {
   name: "에르메스 로즈 립밤",
@@ -91,6 +107,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [productPopup, setProductPopup] = useState(false);
   const [placePopup, setPlacePopup] = useState(false);
+  const [locationPopup, setLocationPopup] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -331,21 +348,28 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                   </p>
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
-                  <div
-                    className={`px-3 py-[9px] min-h-[36px] text-[15px] leading-snug ${
-                      isMe
-                        ? "bg-[#FEE500] text-[#191919]"
-                        : darkMode
-                          ? "bg-[#3a3a3c] text-white"
-                          : "bg-white text-[#191919]"
-                    }`}
-                    style={{ borderRadius: CHAT_BUBBLE_RADIUS, wordBreak: "keep-all" }}
-                  >
-                    <LinkifyText text={msg.text} onLinkClick={(kw) => {
-                      if (kw.includes("뚜흐느솔로")) setPlacePopup(true);
-                      else if (kw.includes("에르메스")) setProductPopup(true);
-                    }} />
-                  </div>
+                  {msg.image ? (
+                    <div className="overflow-hidden" style={{ borderRadius: CHAT_BUBBLE_RADIUS, maxWidth: 220 }}>
+                      <img src={msg.image} alt={msg.text} className="w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div
+                      className={`px-3 py-[9px] min-h-[36px] text-[15px] leading-snug ${
+                        isMe
+                          ? "bg-[#FEE500] text-[#191919]"
+                          : darkMode
+                            ? "bg-[#3a3a3c] text-white"
+                            : "bg-white text-[#191919]"
+                      }`}
+                      style={{ borderRadius: CHAT_BUBBLE_RADIUS, wordBreak: "keep-all" }}
+                    >
+                      <LinkifyText text={msg.text} onLinkClick={(kw) => {
+                        if (kw.includes("뚜흐느솔로")) setPlacePopup(true);
+                        else if (kw.includes("에르메스")) setProductPopup(true);
+                        else if (kw.includes("어디쯤")) setLocationPopup(true);
+                      }} />
+                    </div>
+                  )}
                   <span className={`text-[10px] flex-shrink-0 ${darkMode ? "text-gray-500" : "text-black/60"}`}>
                     {formatMessageTime(msg.timestamp)}
                   </span>
@@ -418,12 +442,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
           {/* 팝업 외곽 래퍼: bottom 포지셔닝 (transform 미사용 → backdrop-filter 보존) */}
           <div
             className="absolute z-[61]"
-            style={{
-              left: 16,
-              right: 16,
-              bottom: 16,
-              transition: "bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease",
-            }}
+            style={POPUP_POSITION_STYLE}
           >
             <div className="relative">
               {/* 핑크 그라디언트 글로우 */}
@@ -433,21 +452,13 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
               >
                 <div
                   className="absolute inset-[-100%] animate-gradient-spin"
-                  style={{
-                    background:
-                      "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)",
-                  }}
+                  style={{ background: GLOW_GRADIENT_BG }}
                 />
               </div>
               {/* 카드 본체 */}
               <div
                 className={`relative rounded-[30px] overflow-hidden ai-layer-blur ${darkMode ? "dark" : ""}`}
-                style={{
-                  zIndex: 1,
-                  boxShadow: darkMode
-                    ? "inset 0 0 0 1px rgba(255,255,255,0.12)"
-                    : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
-                }}
+                style={{ zIndex: 1, boxShadow: cardBoxShadow(darkMode) }}
               >
             {/* 상품 이미지 + 정보 */}
             <div className="flex items-center gap-4 px-5 pt-5 pb-4">
@@ -509,12 +520,7 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
           />
           <div
             className="absolute z-[61]"
-            style={{
-              left: 16,
-              right: 16,
-              bottom: 16,
-              transition: "bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease",
-            }}
+            style={POPUP_POSITION_STYLE}
           >
             <div className="relative">
               <div
@@ -523,20 +529,12 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
               >
                 <div
                   className="absolute inset-[-100%] animate-gradient-spin"
-                  style={{
-                    background:
-                      "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)",
-                  }}
+                  style={{ background: GLOW_GRADIENT_BG }}
                 />
               </div>
               <div
                 className={`relative rounded-[30px] overflow-hidden ai-layer-blur ${darkMode ? "dark" : ""}`}
-                style={{
-                  zIndex: 1,
-                  boxShadow: darkMode
-                    ? "inset 0 0 0 1px rgba(255,255,255,0.12)"
-                    : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
-                }}
+                style={{ zIndex: 1, boxShadow: cardBoxShadow(darkMode) }}
               >
                 {/* 플레이스 이미지 */}
                 <div className="w-full h-[240px] overflow-hidden">
@@ -566,15 +564,106 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
                 <div className="flex px-5 gap-2 pb-5">
                   <button
                     type="button"
-                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white text-black" : "bg-[#191919] text-white"}`}
+                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-[rgba(0,0,0,0.10)] text-[#191919]"}`}
+                    onClick={() => setPlacePopup(false)}
+                  >
+                    공유하기
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-[rgba(0,0,0,0.10)] text-[#191919]"}`}
                     onClick={() => setPlacePopup(false)}
                   >
                     길찾기
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-[rgba(0,0,0,0.10)] text-[#191919]"}`}
+                    className={`flex-1 h-[40px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white text-black" : "bg-[#191919] text-white"}`}
                     onClick={() => setPlacePopup(false)}
+                  >
+                    예약하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      {/* ── 위치 공유 팝업 ── */}
+      {locationPopup && (
+        <>
+          <div
+            className="absolute inset-0 z-[60]"
+            onClick={() => setLocationPopup(false)}
+          />
+          <div
+            className="absolute z-[61]"
+            style={POPUP_POSITION_STYLE}
+          >
+            <div className="relative">
+              <div
+                className="absolute inset-[-8px] rounded-[32px] overflow-hidden pointer-events-none animate-glow-breathe"
+                style={{ zIndex: 0 }}
+              >
+                <div
+                  className="absolute inset-[-100%] animate-gradient-spin"
+                  style={{ background: GLOW_GRADIENT_BG }}
+                />
+              </div>
+              <div
+                className={`relative rounded-[28px] overflow-hidden backdrop-blur-[4px]`}
+                style={{
+                  zIndex: 1,
+                  backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.9)",
+                  boxShadow: cardBoxShadow(darkMode),
+                }}
+              >
+                {/* 타이틀 + 설명 */}
+                <div className="px-5 pt-8 pb-4">
+                  <p className={`text-[18px] font-bold leading-tight ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                    기다리는 친구에게 나의 위치를 공유할까요?
+                  </p>
+                  <p className={`text-[15px] mt-1 leading-relaxed ${darkMode ? "text-gray-300" : "text-[#191919]"}`}>
+                    약속 장소인 판교역까지 약 2km 남았어요.<br />현재 위치를 공유하고 남은 시간을 알려주세요!
+                  </p>
+                </div>
+
+                {/* 카카오맵 카드 */}
+                <div className="mx-5 mb-4 rounded-[16px] overflow-hidden" style={{ border: darkMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)" }}>
+                  {/* 카카오맵 헤더 + 도착 정보 */}
+                  <div className={`px-4 pt-3 pb-3 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <img src="/kakaomap-icon.png" alt="카카오맵" className="w-5 h-5 rounded-full" />
+                      <span className={`text-[13px] font-medium ${darkMode ? "text-gray-300" : "text-[#191919]"}`}>카카오맵</span>
+                    </div>
+                    <p className={`text-[17px] font-bold ${darkMode ? "text-white" : "text-[#191919]"}`}>오전 10:15 도착</p>
+                    <p className={`text-[14px] mt-1 ${darkMode ? "text-gray-400" : "text-[#767676]"}`}>거의 다 왔어요, 조금만 서두르세요!</p>
+                  </div>
+                  {/* 지도 이미지 */}
+                  <div className="w-full h-[180px] overflow-hidden">
+                    <img src="/map-pangyo.png" alt="판교역 지도" className="w-full h-full object-cover" />
+                  </div>
+                </div>
+
+                {/* 버튼 */}
+                <div className="flex px-5 gap-2 pb-5">
+                  <button
+                    type="button"
+                    className={`flex-1 h-[44px] rounded-full text-[14px] font-semibold ${darkMode ? "bg-white/10 text-gray-300" : "bg-[rgba(0,0,0,0.10)] text-[#191919]"}`}
+                    onClick={() => setLocationPopup(false)}
+                  >
+                    카카오맵 홈
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 h-[44px] rounded-full text-[14px] font-semibold text-[#191919]"
+                    style={{ background: "#FEE500" }}
+                    onClick={() => {
+                      if (activeChatRoom) {
+                        sendMessage(activeChatRoom.id, "📍 내 위치를 공유했어요", "/location-share-card.png");
+                      }
+                      setLocationPopup(false);
+                    }}
                   >
                     공유하기
                   </button>

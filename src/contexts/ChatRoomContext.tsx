@@ -7,6 +7,7 @@ export interface ChatRoomMessage {
   sender: string; // "me" 또는 멤버 이름
   text: string;
   timestamp: number;
+  image?: string; // 이미지 URL (옵션)
 }
 
 // ── 채팅방 타입 ──
@@ -33,7 +34,7 @@ interface ChatRoomContextType {
   /** 채팅방 닫기 (목록으로) */
   closeChatRoom: () => void;
   /** 메시지 전송 */
-  sendMessage: (roomId: string, text: string) => void;
+  sendMessage: (roomId: string, text: string, image?: string) => void;
   /** 전체 읽음 처리 */
   markAllRead: () => void;
   /** 활성 채팅방 데이터 */
@@ -265,12 +266,13 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
     setActiveChatRoomId(null);
   }, [activeChatRoomId]);
 
-  const sendMessage = useCallback((roomId: string, text: string) => {
+  const sendMessage = useCallback((roomId: string, text: string, image?: string) => {
     const msg: ChatRoomMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       sender: "me",
       text,
       timestamp: Date.now(),
+      ...(image ? { image } : {}),
     };
 
     // pending 방이면 첫 메시지와 함께 리스트에 추가
@@ -315,10 +317,11 @@ export function ChatRoomProvider({ children }: { children: ReactNode }) {
           "재밌겠다 ㅎㅎ",
           "헐 대박",
         ];
+        const replyText = image ? "오키 이따봐~" : responses[Math.floor(Math.random() * responses.length)];
         const reply: ChatRoomMessage = {
           id: `msg-${Date.now()}-reply`,
           sender: responder.name,
-          text: responses[Math.floor(Math.random() * responses.length)],
+          text: replyText,
           timestamp: Date.now(),
         };
         return prev.map((r) =>
