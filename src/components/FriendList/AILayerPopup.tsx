@@ -44,8 +44,8 @@ async function getAIResponse(
   chatRoomMessages?: { sender: string; text: string }[],
   allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[],
 ): Promise<string> {
-  // 시뮬레이션: 1초 딜레이 후 랜덤 응답
-  await new Promise((r) => setTimeout(r, 1000));
+  // 시뮬레이션: 짧은 딜레이 후 응답
+  await new Promise((r) => setTimeout(r, 500));
 
   // 간단한 키워드 매칭 응답
   const lower = userMessage.toLowerCase();
@@ -81,6 +81,12 @@ async function getAIResponse(
     if (recipient) {
       return `${recipient}에게 보낼 메시지를 입력해주세요. 음성 또는 텍스트로 작성할 수 있어요. 전달할 내용을 알려주시면 최근 대화를 참고해서 자연스럽게 보내드릴게요!`;
     }
+  }
+  if (lower.includes("첫 인사") || lower.includes("인사말")) {
+    return "이런 첫 인사는 어때요?\n💬 \"안녕! 요즘 어떻게 지내? 오랜만에 연락하니까 반갑다 😊\"\n가볍고 자연스러운 톤이라 부담 없이 대화를 시작할 수 있어요!";
+  }
+  if (lower.includes("이모티콘 추천") || lower.includes("이모티콘추천")) {
+    return "대화 분위기에 맞는 이모티콘을 골라봤어요!\n🐶 라이언 — 귀여운 리액션에 딱\n🎉 춘식이 축하 — 좋은 소식에 바로 쓸 수 있어요\n😆 무지 빵터짐 — 웃긴 얘기에 찰떡\n카카오 이모티콘샵에서 더 많이 구경할 수 있어요!";
   }
   if (lower.includes("궁합")) {
     return "두 분의 궁합을 봐드릴게요!\n💛 대화 궁합 92점\n답장 속도가 비슷하고, 서로 질문과 리액션의 균형이 잘 맞아요. 특히 약속을 잡을 때 배려하는 표현이 많아서 소통 스타일이 잘 맞는 편이에요!";
@@ -202,6 +208,8 @@ interface AILayerPopupProps {
   onSendReply?: (text: string) => void; // 추천 답장을 채팅방에 전송
   allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[]; // 전체 채팅방 (읽음처리용)
   onMarkAllRead?: () => void; // 전체 읽음처리
+  showNotificationList?: boolean; // 알림 아이콘 클릭 시 알림 리스트 뷰 표시
+  onNotificationListClose?: () => void; // 알림 리스트 닫을 때 호출
 }
 
 // 맥락별 추천 칩
@@ -224,10 +232,9 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
     "우리 둘 궁합은??",
   ],
   "chat-room-new": [
-    "인사해줘",
-    "첫 메시지 추천해줘",
+    "첫 인사말 추천해줘",
+    "분위기 맞는 이모티콘 추천",
     "오늘 일정 공유해줘",
-    "이해수에게 안부 전해줘", // 1:1일 때 chatPartnerName으로 치환, 그룹이면 "단톡방에 인사해줘"로 대체
   ],
 };
 
@@ -239,7 +246,7 @@ function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string,
     return [...front, ...chatProductSuggestions];
   }
   if (ctx === "chat-room-new" && !chatPartnerName) {
-    return base.map((s) => (s.includes("이해수에게") ? "단톡방에 인사해줘" : s));
+    return base;
   }
   if (ctx === "chat-room" && !chatPartnerName) {
     return base.filter((s) => !s.includes("궁합")).map((s) => (s.includes("이해수에게") ? "답장해줘" : s));
@@ -405,7 +412,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, allChatRooms, onMarkAllRead }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, allChatRooms, onMarkAllRead, showNotificationList: _sn = false, onNotificationListClose: _snClose }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
   const [, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");

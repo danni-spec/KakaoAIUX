@@ -90,7 +90,6 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
   const [text, setText] = useState("");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [productPopup, setProductPopup] = useState(false);
-  const [productTab, setProductTab] = useState<"price" | "gift">("price");
   const [placePopup, setPlacePopup] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
