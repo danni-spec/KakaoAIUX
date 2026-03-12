@@ -199,7 +199,6 @@ export function ChatRoomDetail({
 }) {
   const { activeChatRoom, closeChatRoom, sendMessage } = useChatRooms();
   const [text, setText] = useState("");
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [productPopup, setProductPopup] = useState(false);
   const [placePopupLocal, setPlacePopupLocal] = useState(false);
   const [locationPopup, setLocationPopup] = useState(false);
@@ -225,24 +224,19 @@ export function ChatRoomDetail({
   }, []);
 
   // ── VisualViewport API로 키보드 높이 추적 ──
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [kbHeight, setKbHeight] = useState(0);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     let rafId = 0;
-    const handleViewport = () => {
+    const sync = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        // offsetTop: iOS에서 키보드로 뷰포트가 스크롤된 양 보정
-        const kbHeight = window.innerHeight - vv.height - vv.offsetTop;
-        if (kbHeight > 50) {
-          setViewportHeight(vv.height + vv.offsetTop);
-          setKeyboardOpen(true);
-        } else {
-          setViewportHeight(null);
-          setKeyboardOpen(false);
-        }
-        // 스크롤 고정: body 바운싱 방지
+        const h = window.innerHeight - vv.height;
+        const newKb = h > 50 ? h : 0;
+        setKbHeight(newKb);
+
+        // body 바운싱 방지
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
         window.scrollTo(0, 0);
@@ -252,26 +246,24 @@ export function ChatRoomDetail({
         });
       });
     };
-    vv.addEventListener("resize", handleViewport);
-    vv.addEventListener("scroll", handleViewport);
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
     return () => {
       cancelAnimationFrame(rafId);
-      vv.removeEventListener("resize", handleViewport);
-      vv.removeEventListener("scroll", handleViewport);
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
     };
   }, []);
 
   const onInputFocus = useCallback(() => {
-    setKeyboardOpen(true);
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
     });
   }, []);
   const onInputBlur = useCallback(() => {
-    // VisualViewport이 키보드 닫힘을 감지하면 자동 처리되므로 여기선 폴백만
-    if (!window.visualViewport || window.innerHeight - window.visualViewport.height < 50) {
-      setKeyboardOpen(false);
-      setViewportHeight(null);
+    const vv = window.visualViewport;
+    if (!vv || window.innerHeight - vv.height < 50) {
+      setKbHeight(0);
     }
   }, []);
 
@@ -429,11 +421,10 @@ export function ChatRoomDetail({
 
   return (
     <div
-      className={`fixed left-0 right-0 top-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      className={`fixed inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
-        height: viewportHeight ? `${viewportHeight}px` : "100%",
-        transition: "height 0.1s ease-out",
+        paddingBottom: kbHeight > 0 ? kbHeight : 0,
       }}
     >
       {/* 헤더 */}
@@ -542,7 +533,7 @@ export function ChatRoomDetail({
       </div>
 
       {/* 입력 영역 */}
-      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: keyboardOpen ? 0 : "calc(8px + env(safe-area-inset-bottom))" }}>
+      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: kbHeight > 0 ? 4 : "calc(8px + env(safe-area-inset-bottom))" }}>
         <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
           <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
         </button>
@@ -592,7 +583,7 @@ export function ChatRoomDetail({
           )}
         </div>
       </div>
-      {!keyboardOpen && (
+      {kbHeight === 0 && (
         <div className={`flex-shrink-0 flex items-end justify-center pb-2 pt-[12px] ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
           <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
         </div>

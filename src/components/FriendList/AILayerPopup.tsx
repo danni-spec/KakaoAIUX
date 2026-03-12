@@ -1517,7 +1517,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
-                          onClick={() => exitMeetingMode()}
+                          onClick={() => { exitMeetingMode(); onClose(); }}
                         >
                           확인
                         </button>
@@ -1840,7 +1840,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         type="button"
                         className="flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold text-gray-700 active:opacity-80"
                         style={{ background: "rgba(0,0,0,0.14)" }}
-                        onClick={() => { resetToDefaultView(); setDirectionMode(false); setDirectionDest(""); doStart(); }}
+                        onClick={() => { setDirectionMode(false); setDirectionDest(""); onClose(); }}
                       >
                         카카오맵
                       </button>
@@ -2105,7 +2105,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     type="button"
                     className={`w-full h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors duration-500 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                     style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
-                    onClick={() => { setDarkmodeView(false); setTimeout(() => { resetToDefaultView(); doStart(); }, 150); }}
+                    onClick={() => { setDarkmodeView(false); onClose(); }}
                   >
                     완료
                   </button>
@@ -2170,7 +2170,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
-                          onClick={() => { resetToDefaultView(); setWishlistView(false); setGiftResult(null); setWishlistPhase("product"); doStart(); }}
+                          onClick={() => { setWishlistView(false); setGiftResult(null); setWishlistPhase("product"); onClose(); }}
                         >
                           선물하기 홈
                         </button>
@@ -2228,14 +2228,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                           style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
-                          onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
+                          onClick={() => { setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); onClose(); }}
                         >
                           친구와 1:1 채팅
                         </button>
                         <button
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:bg-[#333] transition-colors ${darkMode ? "text-black bg-[#FEE500]" : "text-white bg-[#191919]"}`}
-                          onClick={() => { resetToDefaultView(); setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); doStart(); }}
+                          onClick={() => { setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); onClose(); }}
                         >
                           확인
                         </button>
