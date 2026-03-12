@@ -224,15 +224,54 @@ export function ChatRoomDetail({
     return () => { if (linkLoadingTimerRef.current) clearTimeout(linkLoadingTimerRef.current); };
   }, []);
 
-  // 키보드 감지 (포커스 기반 — VisualViewport 조작 없이)
+  // ── VisualViewport API로 키보드 높이 추적 ──
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let rafId = 0;
+    const handleViewport = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const kbHeight = window.innerHeight - vv.height;
+        if (kbHeight > 50) {
+          setViewportHeight(vv.height);
+          setKeyboardOpen(true);
+          // 스크롤 고정
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } else {
+          setViewportHeight(null);
+          setKeyboardOpen(false);
+        }
+        // 메시지 맨 아래로
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+        });
+      });
+    };
+    vv.addEventListener("resize", handleViewport);
+    vv.addEventListener("scroll", handleViewport);
+    return () => {
+      cancelAnimationFrame(rafId);
+      vv.removeEventListener("resize", handleViewport);
+      vv.removeEventListener("scroll", handleViewport);
+    };
+  }, []);
+
   const onInputFocus = useCallback(() => {
     setKeyboardOpen(true);
-    // 메시지 맨 아래로
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
     });
   }, []);
-  const onInputBlur = useCallback(() => setKeyboardOpen(false), []);
+  const onInputBlur = useCallback(() => {
+    // VisualViewport이 키보드 닫힘을 감지하면 자동 처리되므로 여기선 폴백만
+    if (!window.visualViewport || window.innerHeight - window.visualViewport.height < 50) {
+      setKeyboardOpen(false);
+      setViewportHeight(null);
+    }
+  }, []);
 
   // 원 제스처 (마우스)
   const circlePointsRef = useRef<{ x: number; y: number }[]>([]);
@@ -388,8 +427,12 @@ export function ChatRoomDetail({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      className={`fixed left-0 right-0 top-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        height: viewportHeight ? `${viewportHeight}px` : "100%",
+        transition: "height 0.1s ease-out",
+      }}
     >
       {/* 헤더 */}
       <div
@@ -793,16 +836,7 @@ export function ChatRoomDetail({
       {/* ── 링크 클릭 로딩 오버레이 ── */}
       {linkLoading && (
         <>
-          <div className="absolute inset-0 z-[79]" style={{ backgroundColor: "rgba(0,0,0,0.05)" }} />
-          <div
-            className="absolute z-[80] rounded-[24px] flex items-center justify-center backdrop-blur-[20px]"
-            style={{
-              left: 16, right: 16, bottom: 16, height: 320,
-              backgroundColor: darkMode ? "rgba(44,44,46,0.9)" : "rgba(255,255,255,0.85)",
-              boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.1)",
-              animation: "popup-slide-up 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards",
-            }}
-          >
+          <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.05)" }}>
             <div className="w-[40px] h-[40px] animate-spin-loader">
               <svg viewBox="0 0 40 40" className="w-full h-full">
                 <circle

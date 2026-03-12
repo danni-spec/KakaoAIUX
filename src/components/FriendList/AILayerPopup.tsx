@@ -286,7 +286,7 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
     "대화 요약해줘",
     "다음에 뭐라고할까?",
     "우리 둘 궁합은??",
-    "추억 영상 만들기",
+    "판교역 맛집 추천",
   ],
   "chat-room-new": [
     "첫 인사말 추천해줘",
