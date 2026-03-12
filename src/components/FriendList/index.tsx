@@ -86,10 +86,13 @@ export function FriendList() {
     return false;
   });
 
-  // Sync darkMode → localStorage + body class
+  // Sync darkMode → localStorage + body class + html/body 배경색 (iOS PWA safe area 채움)
   useEffect(() => {
     localStorage.setItem("darkMode", String(darkMode));
     document.body.classList.toggle("dark-mode", darkMode);
+    const bg = darkMode ? "#1c1c1e" : "#ffffff";
+    document.documentElement.style.backgroundColor = bg;
+    document.body.style.backgroundColor = bg;
   }, [darkMode]);
 
   // 채팅방 전환 시 장소 팝업 닫기
@@ -313,7 +316,7 @@ export function FriendList() {
 
   return (
     <div
-      className={`min-h-dvh h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
+      className={`h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
     >
       <SquircleClipDef />
       <StatusBar darkMode={darkMode} />

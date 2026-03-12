@@ -7,7 +7,7 @@ function App() {
 
   return (
     <ChatRoomProvider>
-      <div className="w-full min-h-[100dvh] h-[100dvh] overflow-hidden relative">
+      <div className="w-full h-full overflow-hidden relative">
         <FriendList />
         {showWalkthrough && (
           <div
