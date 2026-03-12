@@ -233,17 +233,19 @@ export function ChatRoomDetail({
     const handleViewport = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        const kbHeight = window.innerHeight - vv.height;
+        // offsetTop: iOS에서 키보드로 뷰포트가 스크롤된 양 보정
+        const kbHeight = window.innerHeight - vv.height - vv.offsetTop;
         if (kbHeight > 50) {
-          setViewportHeight(vv.height);
+          setViewportHeight(vv.height + vv.offsetTop);
           setKeyboardOpen(true);
-          // 스크롤 고정
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
         } else {
           setViewportHeight(null);
           setKeyboardOpen(false);
         }
+        // 스크롤 고정: body 바운싱 방지
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        window.scrollTo(0, 0);
         // 메시지 맨 아래로
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -540,7 +542,7 @@ export function ChatRoomDetail({
       </div>
 
       {/* 입력 영역 */}
-      <div className={`flex items-center gap-[10px] px-[12px] py-[8px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingBottom: keyboardOpen ? 8 : "calc(8px + env(safe-area-inset-bottom))" }}>
+      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: keyboardOpen ? 0 : "calc(8px + env(safe-area-inset-bottom))" }}>
         <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
           <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
         </button>
@@ -548,6 +550,12 @@ export function ChatRoomDetail({
           <input
             ref={inputRef}
             type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            enterKeyHint="send"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
