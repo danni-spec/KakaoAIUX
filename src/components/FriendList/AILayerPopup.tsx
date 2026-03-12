@@ -1018,79 +1018,111 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       return;
     }
     const action = matchCommand(text);
-    if (action) {
-      // 명령 매칭 → 로딩 스피너 전환
+
+    // ── Direct Action Type: 즉시 시스템 동작 (텍스트 입력과 동일한 분기) ──
+    if (action === "gift") {
       setIsLoading(true);
-      setStatusMessage(action === "choonsik-card" ? "사원증을 불러오는 중" : "처리 중...");
-      // 1.5초 후 → 액션 처리
+      setStatusMessage("처리 중...");
       loadingTimerRef.current = setTimeout(() => {
         setIsLoading(false);
-        if (action === "chat-summary") {
-          doStop();
-          setTranscript("");
-          setInterimText("");
-          setStatusMessage(null);
-          setChoonsikCardView(false);
-          setTextMode(true);
-          sendChatMessage(text);
-        } else if (action === "gift") {
-          const recipient = extractGiftRecipient(text);
-          setGiftResult(recipient);
-          setWishlistView(true);
-          setTextMode(false);
-          setChoonsikCardView(false);
-          setTranscript("");
-          setInterimText("");
-          setStatusMessage(null);
-        } else if (action === "message") {
-          fillMessageDraft(text);
-        } else if (action === "send" && (replyModeRef.current || inputTextRef.current.trim())) {
-          doSendMessage();
-        } else if (action === "darkmode") {
-          const darkIntent = parseDarkModeIntent(text);
-          setChoonsikCardView(false);
-          setDarkmodeView(true);
-          if (darkIntent !== null) {
-            setTimeout(() => onDarkModeToggle(darkIntent), 350);
-          }
-        } else if (action === "navigation") {
-          const dest = extractDestination(text);
-          setChoonsikCardView(false);
-          setDirectionMode(true);
-          setDirectionDest(dest);
-        } else if (action === "choonsik-card") {
-          doStop();
-          inputRef.current?.blur();
-          setTranscript("");
-          setInterimText("");
-          setStatusMessage(null);
-          setChoonsikCardView(true);
-          // choonsikFullscreen 제거됨
-        } else if (action === "create-chatroom") {
-          const { members, message } = extractChatRequest(text);
-          doStop();
-          setTranscript("");
-          setInterimText("");
-          setStatusMessage(null);
-          if (members.length > 0 && onCreateChatRoom) {
-            onCreateChatRoom(members, message || undefined);
-            onClose();
-          }
-        } else {
-          // 미처리 액션 → 보이스 리스닝 복귀
-          setStatusMessage(null);
-          doStart();
-        }
-      }, 1500);
-    } else {
-      setStatusMessage("음성을 인식하지 못했어요");
-      // 3초 후 상태 리셋 → 다시 듣기
-      setTimeout(() => {
         setStatusMessage(null);
+        const recipient = extractGiftRecipient(text);
+        setGiftResult(recipient);
+        setWishlistView(true);
+        setTextMode(false);
+        setChoonsikCardView(false);
         setTranscript("");
         setInterimText("");
-        doStart();
-      }, 3000);
+      }, 1500);
+    } else if (action === "darkmode") {
+      const darkIntent = parseDarkModeIntent(text);
+      setIsLoading(true);
+      setStatusMessage("처리 중...");
+      loadingTimerRef.current = setTimeout(() => {
+        setIsLoading(false);
+        setStatusMessage(null);
+        setChoonsikCardView(false);
+        setTextMode(false);
+        setDarkmodeView(true);
+        if (darkIntent !== null) {
+          setTimeout(() => onDarkModeToggle(darkIntent), 350);
+        }
+      }, 1500);
+    } else if (action === "navigation") {
+      const dest = extractDestination(text);
+      setIsLoading(true);
+      setStatusMessage("처리 중...");
+      loadingTimerRef.current = setTimeout(() => {
+        setIsLoading(false);
+        setStatusMessage(null);
+        setChoonsikCardView(false);
+        setTextMode(false);
+        setDirectionMode(true);
+        setDirectionDest(dest);
+      }, 1500);
+    } else if (action === "choonsik-card") {
+      setIsLoading(true);
+      setStatusMessage("사원증을 불러오는 중");
+      loadingTimerRef.current = setTimeout(() => {
+        setIsLoading(false);
+        setStatusMessage(null);
+        doStop();
+        inputRef.current?.blur();
+        setTranscript("");
+        setInterimText("");
+        setTextMode(false);
+        setSummaryResult(null);
+        setChoonsikCardView(true);
+      }, 1500);
+    } else if (action === "create-chatroom") {
+      const { members, message } = extractChatRequest(text);
+      if (members.length > 0 && onCreateChatRoom) {
+        setIsLoading(true);
+        setStatusMessage("처리 중...");
+        loadingTimerRef.current = setTimeout(() => {
+          setIsLoading(false);
+          setStatusMessage(null);
+          setTextMode(false);
+          doStop();
+          onCreateChatRoom(members, message || undefined);
+          onClose();
+        }, 1500);
+      } else {
+        // 멤버 미지정 → AI 안내 (대화형)
+        setTranscript("");
+        setInterimText("");
+        setStatusMessage(null);
+        setTextMode(true);
+        sendChatMessage(text);
+      }
+    } else if (action === "message") {
+      setIsLoading(true);
+      setStatusMessage("처리 중...");
+      loadingTimerRef.current = setTimeout(() => {
+        setIsLoading(false);
+        setStatusMessage(null);
+        fillMessageDraft(text);
+      }, 1500);
+    } else if (action === "send" && (replyModeRef.current || inputTextRef.current.trim())) {
+      doSendMessage();
+    } else if (action === "mark-read") {
+      // 읽음처리 → 대화형 플로우 + 실제 읽음처리 (텍스트와 동일)
+      setTranscript("");
+      setInterimText("");
+      setStatusMessage(null);
+      setTextMode(true);
+      sendChatMessage(text).then(() => {
+        onMarkAllRead?.();
+      });
+
+    // ── Conversational Type: AI 대화 플로우 (텍스트와 동일) ──
+    } else {
+      // chat-summary, next-reply, 일반 텍스트 → 대화형 플로우
+      setTranscript("");
+      setInterimText("");
+      setStatusMessage(null);
+      setTextMode(true);
+      sendChatMessage(text);
     }
   }
 

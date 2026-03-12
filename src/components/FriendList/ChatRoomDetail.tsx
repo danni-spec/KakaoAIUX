@@ -533,7 +533,7 @@ export function ChatRoomDetail({
       </div>
 
       {/* 입력 영역 */}
-      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: kbHeight > 0 ? 4 : "calc(8px + env(safe-area-inset-bottom))" }}>
+      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: kbHeight > 0 ? 4 : 8 }}>
         <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
           <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
         </button>
@@ -583,11 +583,6 @@ export function ChatRoomDetail({
           )}
         </div>
       </div>
-      {kbHeight === 0 && (
-        <div className={`flex-shrink-0 flex items-end justify-center pb-2 pt-[12px] ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}>
-          <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
-        </div>
-      )}
 
       {/* ── 상품 레이어 팝업 ── */}
       {productPopup && (
