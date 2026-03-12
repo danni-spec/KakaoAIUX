@@ -3,7 +3,7 @@
  *
  * ┌─ 구조 ────────────────────────────────────────────────────────────────────┐
  * │  position: absolute  →  콘텐츠 위에 오버레이 (backdrop-blur 실효)         │
- * │  inset-x-[30px] bottom-[30px]  →  좌우·하단 30px 여백                    │
+ * │  inset-x-[30px] bottom-[4px]   →  좌우 30px, 하단 4px 여백               │
  * │  h-[62px] rounded-[80px]  →  높이 62px, 아이콘 25px·버튼 48px 상하 센터   │
  * └───────────────────────────────────────────────────────────────────────────┘
  *
@@ -54,7 +54,7 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
       ].join(" ")}
       style={{
         boxShadow: darkMode ? GLASS_SHADOW_DARK : GLASS_SHADOW_LIGHT,
-        bottom: 30,
+        bottom: "calc(4px + env(safe-area-inset-bottom))",
       }}
     >
       <div

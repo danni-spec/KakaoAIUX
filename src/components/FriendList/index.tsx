@@ -307,11 +307,6 @@ export function FriendList() {
   return (
     <div
       className={`min-h-dvh h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingLeft: "env(safe-area-inset-left)",
-        paddingRight: "env(safe-area-inset-right)",
-      }}
     >
       <SquircleClipDef />
       {/* 원 제스처: 모든 탭에서 원을 그리면 AI 레이어 박스 노출 */}
