@@ -54,7 +54,7 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
       ].join(" ")}
       style={{
         boxShadow: darkMode ? GLASS_SHADOW_DARK : GLASS_SHADOW_LIGHT,
-        bottom: "calc(30px + env(safe-area-inset-bottom))",
+        bottom: 30,
       }}
     >
       <div

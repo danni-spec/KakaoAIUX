@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useChatRooms } from "../../contexts/ChatRoomContext";
 import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
-import { StatusBar } from "./StatusBar";
 
 /** 링키파이 대상 키워드 */
 const LINKIFY_KEYWORDS = ["에르메스 립밤", "성수동 뚜흐느솔로", "어디쯤이야?"] as const;
@@ -278,10 +277,8 @@ export function ChatRoomDetail({ darkMode, onOpenAI }: { darkMode: boolean; onOp
       className={`fixed inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <StatusBar darkMode={darkMode} bgColor={darkMode ? "#1c1c1e" : "#abc1d1"} />
       {/* 헤더 */}
       <div
         className={`relative flex items-center px-4 h-[44px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-[#abc1d1]"}`}

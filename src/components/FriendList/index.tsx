@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { flushSync } from "react-dom";
-import { StatusBar } from "./StatusBar";
 import { Header } from "./Header";
 import { TabNavigation } from "./TabNavigation";
 import { UpdatedFriendsSection } from "./UpdatedFriendsSection";
@@ -102,9 +101,6 @@ export function FriendList() {
   const handleFriendClick = useCallback((name: string) => {
     if (name === "이해수 ❤️") {
       setNotificationOpen(true);
-    } else if (name === "카나나저널") {
-      setShowNotificationList(true);
-      flushSync(() => setAiPopupOpen(true));
     }
   }, []);
 
@@ -313,13 +309,11 @@ export function FriendList() {
       className={`min-h-dvh h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
       <SquircleClipDef />
-      <StatusBar darkMode={darkMode} />
       {/* 원 제스처: 모든 탭에서 원을 그리면 AI 레이어 박스 노출 */}
       <div
         ref={mainRef as React.RefObject<HTMLDivElement>}
@@ -342,6 +336,10 @@ export function FriendList() {
             <AIFriendsSection
               darkMode={darkMode}
               onOpenAI={openAIPopup}
+              onJournalClick={() => {
+                setShowNotificationList(true);
+                flushSync(() => setAiPopupOpen(true));
+              }}
             />
             <FavoriteFriendsSection darkMode={darkMode} />
             <AllFriendsSection darkMode={darkMode} />
