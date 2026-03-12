@@ -8,6 +8,7 @@ import { AIFriendsSection } from "./AIFriendsSection";
 import { FavoriteFriendsSection } from "./FavoriteFriendsSection";
 import { AllFriendsSection } from "./AllFriendsSection";
 import { BottomNavBar } from "./BottomNavBar";
+import { StatusBar } from "./StatusBar";
 import { AILayerPopup } from "./AILayerPopup";
 import { NotificationBanner } from "./NotificationBanner";
 import { ChatRoomList } from "./ChatRoomList";
@@ -309,6 +310,7 @@ export function FriendList() {
       className={`min-h-dvh h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
     >
       <SquircleClipDef />
+      <StatusBar darkMode={darkMode} />
       {/* 원 제스처: 모든 탭에서 원을 그리면 AI 레이어 박스 노출 */}
       <div
         ref={mainRef as React.RefObject<HTMLDivElement>}

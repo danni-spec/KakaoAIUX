@@ -40,14 +40,34 @@ function useBattery() {
   return { level: level ?? 0.85, charging };
 }
 
+// iOS standalone(PWA) 모드 감지
+const isStandalone = typeof window !== "undefined" && (
+  (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
+  window.matchMedia("(display-mode: standalone)").matches
+);
+
 export function StatusBar({ darkMode = false, bgColor }: { darkMode?: boolean; bgColor?: string }) {
   const time = useCurrentTime();
   const { level } = useBattery();
 
   const batteryFillWidth = Math.max(0, Math.min(17, level * 17));
 
+  // PWA standalone 모드: safe area 여백만 확보, Fake UI 숨김
+  if (isStandalone) {
+    return (
+      <div
+        className="flex-shrink-0 transition-colors duration-500"
+        style={{
+          height: "env(safe-area-inset-top)",
+          backgroundColor: bgColor || (darkMode ? "#1c1c1e" : "#ffffff"),
+        }}
+      />
+    );
+  }
+
+  // 브라우저 모드: 기존 Fake 상태바 표시
   return (
-    <div className={`flex items-end justify-between px-6 pb-1 transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`} style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(52px + env(safe-area-inset-top))", ...(bgColor ? { backgroundColor: bgColor } : {}) }}>
+    <div className={`flex items-end justify-between px-6 pb-1 h-[52px] flex-shrink-0 transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`} style={bgColor ? { backgroundColor: bgColor } : undefined}>
       <span className={`text-[15px] font-semibold tracking-tight transition-colors duration-500 ${darkMode ? "text-white" : "text-gray-900"}`}>{time}</span>
       <div className={`flex items-center gap-1.5 transition-colors duration-500 ${darkMode ? "text-white" : "text-gray-900"}`}>
         {/* Battery — iPhone 스타일 (몸체 + 우측 캡) */}
