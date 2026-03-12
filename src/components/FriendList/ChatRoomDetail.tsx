@@ -4,6 +4,130 @@ import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
 import { LinkifyText } from "./LinkifyText";
 
+/** 음성 재생 바 말풍선 + STT 텍스트 */
+function VoiceBubble({ duration, sttText, darkMode, isMe }: { duration: number; sttText: string; darkMode: boolean; isMe: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const mm = Math.floor(duration / 60).toString().padStart(2, "0");
+  const ss = (duration % 60).toString().padStart(2, "0");
+
+  const togglePlay = () => {
+    if (playing) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      setPlaying(false);
+    } else {
+      setPlaying(true);
+      setProgress(0);
+      const step = 100 / (duration * 20); // 50ms 간격
+      intervalRef.current = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(intervalRef.current!);
+            setPlaying(false);
+            return 0;
+          }
+          return prev + step;
+        });
+      }, 50);
+    }
+  };
+
+  useEffect(() => {
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
+
+  const bubbleBg = isMe
+    ? "bg-[#FEE500]"
+    : darkMode ? "bg-[#3a3a3c]" : "bg-white";
+  const textColor = isMe
+    ? "text-[#191919]"
+    : darkMode ? "text-white" : "text-[#191919]";
+  const subColor = isMe
+    ? "text-[#191919]/60"
+    : darkMode ? "text-gray-400" : "text-[#767676]";
+  const trackBg = isMe
+    ? "bg-[#191919]/15"
+    : darkMode ? "bg-white/20" : "bg-[#191919]/10";
+  const fillBg = isMe
+    ? "bg-[#191919]/50"
+    : darkMode ? "bg-white/60" : "bg-[#191919]/40";
+
+  return (
+    <div className="flex flex-col gap-1.5" style={{ maxWidth: 260 }}>
+      {/* 음성 재생 바 */}
+      <div className={`${bubbleBg} px-3 py-[10px]`} style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            className={`w-[28px] h-[28px] rounded-full flex items-center justify-center flex-shrink-0 ${isMe ? "bg-[#191919]/10" : darkMode ? "bg-white/15" : "bg-[#191919]/8"}`}
+            onClick={togglePlay}
+          >
+            {playing ? (
+              <svg className={`w-3.5 h-3.5 ${textColor}`} viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+            ) : (
+              <svg className={`w-3.5 h-3.5 ${textColor}`} viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
+          </button>
+          {/* 프로그레스 바 */}
+          <div className={`flex-1 h-[3px] rounded-full ${trackBg} overflow-hidden`}>
+            <div
+              className={`h-full rounded-full ${fillBg} transition-all duration-100`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className={`text-[12px] tabular-nums flex-shrink-0 ${subColor}`}>
+            {mm}:{ss}
+          </span>
+        </div>
+      </div>
+      {/* STT 텍스트 말풍선 */}
+      {sttText && (
+        <div
+          className={`${bubbleBg} px-3 py-[10px]`}
+          style={{ borderRadius: CHAT_BUBBLE_RADIUS, wordBreak: "keep-all" }}
+        >
+          {/* 상단: 녹음 시간 정보 */}
+          <p className={`text-[14px] leading-[1.55] mb-[6px] ${textColor}`}>
+            {(() => {
+              const now = new Date();
+              const startH = now.getHours();
+              const startM = now.getMinutes();
+              const endTotal = startM + Math.floor(duration / 60);
+              const endH = startH + Math.floor(endTotal / 60);
+              const endM = endTotal % 60;
+              return `${now.getMonth() + 1}.${now.getDate()} ${startH.toString().padStart(2, "0")}:${startM.toString().padStart(2, "0")}~${(endH % 24).toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
+            })()}
+          </p>
+          {/* 본문: 장문 STT (최대 8줄) */}
+          <p
+            className={`text-[14px] leading-[1.55] ${textColor}`}
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 20,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {sttText}
+          </p>
+          {/* 하단: Kanvas 공유 캡션 */}
+          <p className={`text-[10px] mt-[8px] ${subColor}`}>
+            Kanvas로 공유됨
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatMessageTime(ts: number): string {
   const d = new Date(ts);
   const h = d.getHours();
@@ -35,7 +159,7 @@ const POPUP_POSITION_STYLE: React.CSSProperties = {
   left: 16,
   right: 16,
   bottom: 16,
-  transition: "bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease",
+  animation: "popup-slide-up 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards",
 };
 
 const GLOW_GRADIENT_BG =
@@ -79,10 +203,26 @@ export function ChatRoomDetail({
   const [productPopup, setProductPopup] = useState(false);
   const [placePopupLocal, setPlacePopupLocal] = useState(false);
   const [locationPopup, setLocationPopup] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const linkLoadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const placePopup = placePopupProp ?? placePopupLocal;
   const setPlacePopup = onPlacePopupChange ?? setPlacePopupLocal;
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 링크 클릭 → 로딩 → 팝업 오픈
+  const openWithLoading = useCallback((openFn: () => void) => {
+    if (linkLoadingTimerRef.current) clearTimeout(linkLoadingTimerRef.current);
+    setLinkLoading(true);
+    linkLoadingTimerRef.current = setTimeout(() => {
+      setLinkLoading(false);
+      openFn();
+    }, 2000);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (linkLoadingTimerRef.current) clearTimeout(linkLoadingTimerRef.current); };
+  }, []);
 
   // 키보드 감지 (포커스 기반 — VisualViewport 조작 없이)
   const onInputFocus = useCallback(() => {
@@ -317,7 +457,14 @@ export function ChatRoomDetail({
                   </p>
                 )}
                 <div className={`flex items-end gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
-                  {msg.image ? (
+                  {msg.voice ? (
+                    <VoiceBubble
+                      duration={msg.voice.duration}
+                      sttText={msg.voice.sttText}
+                      darkMode={darkMode}
+                      isMe={isMe}
+                    />
+                  ) : msg.image ? (
                     <div className="overflow-hidden" style={{ borderRadius: CHAT_BUBBLE_RADIUS, maxWidth: 220 }}>
                       <img src={msg.image} alt={msg.text} className="w-full object-cover" />
                     </div>
@@ -333,9 +480,9 @@ export function ChatRoomDetail({
                       style={{ borderRadius: CHAT_BUBBLE_RADIUS, wordBreak: "keep-all" }}
                     >
                       <LinkifyText text={msg.text} onLinkClick={(kw) => {
-                        if (kw.includes("뚜흐느솔로")) setPlacePopup(true);
-                        else if (kw.includes("에르메스")) setProductPopup(true);
-                        else if (kw.includes("어디쯤")) setLocationPopup(true);
+                        if (kw.includes("뚜흐느솔로")) openWithLoading(() => setPlacePopup(true));
+                        else if (kw.includes("에르메스")) openWithLoading(() => setProductPopup(true));
+                        else if (kw.includes("어디쯤")) openWithLoading(() => setLocationPopup(true));
                       }} />
                     </div>
                   )}
@@ -350,7 +497,7 @@ export function ChatRoomDetail({
       </div>
 
       {/* 입력 영역 */}
-      <div className={`flex items-center gap-[10px] px-[12px] py-[8px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingBottom: "calc(8px + env(safe-area-inset-bottom))" }}>
+      <div className={`flex items-center gap-[10px] px-[12px] py-[8px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingBottom: keyboardOpen ? 8 : "calc(8px + env(safe-area-inset-bottom))" }}>
         <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
           <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
         </button>
@@ -638,6 +785,41 @@ export function ChatRoomDetail({
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 링크 클릭 로딩 오버레이 ── */}
+      {linkLoading && (
+        <>
+          <div className="absolute inset-0 z-[79]" style={{ backgroundColor: "rgba(0,0,0,0.05)" }} />
+          <div
+            className="absolute z-[80] rounded-[24px] flex items-center justify-center backdrop-blur-[20px]"
+            style={{
+              left: 16, right: 16, bottom: 16, height: 320,
+              backgroundColor: darkMode ? "rgba(44,44,46,0.9)" : "rgba(255,255,255,0.85)",
+              boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.1)",
+              animation: "popup-slide-up 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards",
+            }}
+          >
+            <div className="w-[40px] h-[40px] animate-spin-loader">
+              <svg viewBox="0 0 40 40" className="w-full h-full">
+                <circle
+                  cx="20" cy="20" r="16"
+                  fill="none"
+                  stroke={darkMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.08)"}
+                  strokeWidth="3"
+                />
+                <circle
+                  cx="20" cy="20" r="16"
+                  fill="none"
+                  stroke={darkMode ? "#ffffff" : "#191919"}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray="80 100"
+                />
+              </svg>
             </div>
           </div>
         </>

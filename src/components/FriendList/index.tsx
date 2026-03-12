@@ -394,7 +394,7 @@ export function FriendList() {
         }
         chatRoomMessages={activeChatRoom?.messages.map(m => ({ sender: m.sender, text: m.text }))}
         onSendReply={activeChatRoomId ? (text) => chatRoomActions.sendMessage(activeChatRoomId, text) : undefined}
-        onSendToMyChat={(text) => chatRoomActions.sendMessage("room-my", text)}
+        onSendToMyChat={(text, voice) => chatRoomActions.sendMessage("room-my", text, undefined, voice)}
         allChatRooms={chatRoomActions.chatRooms.map(r => ({ name: r.name, unreadCount: r.unreadCount, lastMessage: r.lastMessage }))}
         onMarkAllRead={chatRoomActions.markAllRead}
         showNotificationList={showNotificationList}

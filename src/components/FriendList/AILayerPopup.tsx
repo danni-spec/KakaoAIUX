@@ -61,8 +61,12 @@ async function getAIResponse(
     return "안읽은 메시지가 없어요! 모두 확인된 상태입니다.";
   }
   // 새 채팅방 만들기 — 대화 상대 미지정 시 안내
-  if (lower.includes("채팅방 만들") || lower.includes("채팅방만들")) {
+  if (lower.includes("채팅방 만들") || lower.includes("채팅방만들") || lower.includes("톡방 만들") || lower.includes("대화방 만들")) {
     return "새 채팅방을 만드려면 누구랑 만들지 알려줘! 예를 들어 \"이해수랑 채팅방 만들어줘\" 또는 \"김민수, 박채원 단톡방 만들어줘\"처럼 말해주면 바로 만들어줄게.";
+  }
+  // 자연어 채팅 의도 — 이름 감지되면 바로 생성됨, 여기는 이름 없는 경우
+  if ((lower.includes("톡하고") || lower.includes("대화하고") || lower.includes("얘기하고") || lower.includes("연락하고")) && (lower.includes("싶") || lower.includes("하자") || lower.includes("할래"))) {
+    return "누구와 대화하고 싶은지 알려주세요! 예를 들어 \"민수랑 톡하고 싶어\" 또는 \"채원이한테 연락해줘\"처럼 말해주면 바로 채팅방을 만들어줄게요.";
   }
   // 메시지 보내기 — 본문 없이 수신자만 지정된 경우
   const msgMatch = userMessage.match(/(.+?)에게\s*(?:메시지|문자)\s*(?:보내|전송)/);
@@ -255,7 +259,7 @@ interface AILayerPopupProps {
   chatProductSuggestions?: string[]; // 채팅방 내 추천 상품 (서제스트 칩 3번째부터 삽입)
   chatRoomMessages?: { sender: string; text: string }[]; // 현재 채팅방 메시지 (대화 요약용)
   onSendReply?: (text: string) => void; // 추천 답장을 채팅방에 전송
-  onSendToMyChat?: (text: string) => void; // 나와의 채팅방에 메시지 전송
+  onSendToMyChat?: (text: string, voice?: { duration: number; sttText: string }) => void; // 나와의 채팅방에 메시지 전송
   allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[]; // 전체 채팅방 (읽음처리용)
   onMarkAllRead?: () => void; // 전체 읽음처리
   showNotificationList?: boolean; // 알림 아이콘 클릭 시 알림 리스트 뷰 표시
@@ -323,6 +327,52 @@ const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
   { keywords: ["읽음처리", "읽음 처리"], action: "mark-read" },
   { keywords: ["뭐라고", "뭐라 할", "뭐라 말", "다음에 뭐"], action: "next-reply" },
 ];
+
+// ── 알려진 친구 이름 목록 (자연어 의도 파악용) ──
+const KNOWN_FRIEND_NAMES = [
+  "다니엘", "김민수", "마르코", "민수", "시나", "이현우", "유나", "태형",
+  "김영지", "이해수", "강지훈", "고성현", "박채원", "이도현", "서은재",
+  "혜선", "유진", "나연", "해수", "채원", "은재", "지훈", "영지", "현우", "도현", "성현",
+];
+
+// ── 자연어 '채팅방 만들기' 의도 감지 ──
+// "민수랑 톡하고 싶어", "채원이한테 연락해줘", "해수랑 대화하자" 등
+const CHAT_INTENT_PATTERNS = [
+  /(.+?)(?:이랑|랑|하고|과|와)\s*(?:톡|채팅|대화|얘기|이야기)\s*(?:하고\s*싶|하자|할래|해줘|하고싶|좀)/,
+  /(.+?)(?:한테|에게)\s*(?:연락|톡|메시지|채팅)\s*(?:해줘|해|하자|좀|할래)/,
+  /(.+?)(?:이랑|랑|하고|과|와)\s*(?:연락|톡)\s*(?:해|하자|해줘|좀)/,
+  /(.+?)(?:이랑|랑)\s*(?:방|톡방|채팅방)\s*(?:만들|열|파)/,
+];
+
+function detectChatIntentFromNL(text: string): { members: string[]; message: string } | null {
+  const normalized = text.trim();
+  for (const pattern of CHAT_INTENT_PATTERNS) {
+    const match = normalized.match(pattern);
+    if (match) {
+      const rawNames = match[1].trim();
+      // 구분자 분리: "민수랑 채원이랑" → 이미 첫 매칭에서 "민수" 캡처됨
+      const names = rawNames
+        .split(/[,，]\s*|\s+(?:이랑|랑|하고|과|와)\s+|\s+/)
+        .map(n => n.replace(/이$/, "").trim())
+        .filter(n => n.length > 0);
+      // 알려진 친구 이름이 하나라도 있으면 의도 확정
+      const matched = names.filter(n => KNOWN_FRIEND_NAMES.some(fn => fn.includes(n) || n.includes(fn)));
+      if (matched.length > 0) {
+        return { members: matched, message: "" };
+      }
+    }
+  }
+  // 패턴 미매칭이어도, 텍스트에 친구 이름 + 대화 의도 키워드가 모두 있으면 매칭
+  const intentKeywords = ["톡", "채팅", "대화", "얘기", "이야기", "연락"];
+  const hasIntent = intentKeywords.some(kw => normalized.includes(kw));
+  if (hasIntent) {
+    const foundNames = KNOWN_FRIEND_NAMES.filter(fn => normalized.includes(fn));
+    if (foundNames.length > 0) {
+      return { members: foundNames, message: "" };
+    }
+  }
+  return null;
+}
 
 interface NavStep {
   instruction: string;
@@ -403,6 +453,8 @@ function matchCommand(text: string): string | null {
   for (const cmd of VOICE_COMMANDS) {
     if (cmd.keywords.some((kw) => normalized.includes(kw))) return cmd.action;
   }
+  // 키워드 미매칭 → 자연어 의도 감지 (친구 이름 + 대화 의도)
+  if (detectChatIntentFromNL(text)) return "create-chatroom";
   return null;
 }
 
@@ -453,8 +505,24 @@ function LoadingMessages({ dark, messages, title }: { dark?: boolean; messages?:
   );
 }
 
+function MeetingLoadingText({ dark }: { dark?: boolean }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setIdx(prev => (prev + 1) % MEETING_LOADING_MSGS.length), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <p className={`text-[15px] font-medium ${dark ? "text-gray-300" : "text-[#767676]"}`}>{MEETING_LOADING_MSGS[idx]}</p>;
+}
+
 /** 채팅방 생성 요청에서 멤버 이름 + 초기 메시지 추출 */
 function extractChatRequest(text: string): { members: string[]; message: string } {
+  // 1) 자연어 의도 감지 우선 시도 ("민수랑 톡하고 싶어" 등)
+  const nlResult = detectChatIntentFromNL(text);
+  if (nlResult && nlResult.members.length > 0) {
+    return nlResult;
+  }
+
+  // 2) 기존 키워드 기반 추출 ("이해수랑 채팅방 만들어줘" 등)
   // 메시지 분리: "... 만들어줘 안녕하세요" → message = "안녕하세요"
   const msgMatch = text.match(/(?:만들어줘|만들어|생성해줘|생성|만들기)\s+(.+)$/);
   const message = msgMatch ? msgMatch[1].trim() : "";
@@ -1407,7 +1475,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           >
               {/* ── 회의 모드 UI ── */}
               {meetingMode && (
-                <div className="relative flex flex-col items-center px-5 pt-8 pb-5 pointer-events-auto">
+                <div className="relative flex flex-col items-center justify-between px-5 pt-8 pb-5 pointer-events-auto" style={{ height: 240 }}>
                   {/* 우상단 접기 버튼 */}
                   {!meetingSaved && (
                     <button
@@ -1421,28 +1489,30 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     </button>
                   )}
                   {meetingSending ? (
-                    <LoadingMessages
-                      dark={darkMode}
-                      messages={MEETING_LOADING_MSGS}
-                      title="나챗방으로 전송 중"
-                    />
+                    <div className="flex flex-col items-center justify-center flex-1 w-full px-6">
+                      <img src="/voice-effect.png" alt="로딩" className="w-14 h-14 rounded-full animate-flip-y flex-shrink-0" />
+                      <p className={`text-[17px] font-semibold mt-5 mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`}>나챗방으로 전송 중</p>
+                      <MeetingLoadingText dark={darkMode} />
+                    </div>
                   ) : meetingSaved ? (
                     <>
-                      {/* 저장 완료 아이콘 */}
-                      <div className="w-14 h-14 rounded-full bg-[#FEE500] mb-5 flex items-center justify-center">
-                        <svg className="w-7 h-7 text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
+                      <div className="flex flex-col items-center">
+                        {/* 저장 완료 아이콘 */}
+                        <div className="w-14 h-14 rounded-full bg-[#FEE500] mb-5 flex items-center justify-center">
+                          <svg className="w-7 h-7 text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        {/* 저장 안내 문구 */}
+                        <p className={`text-[17px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                          녹음이 저장되었습니다
+                        </p>
+                        <p className={`text-[14px] text-center ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                          톡클라우드에서 확인이 가능합니다
+                        </p>
                       </div>
-                      {/* 저장 안내 문구 */}
-                      <p className={`text-[17px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`}>
-                        녹음이 저장되었습니다
-                      </p>
-                      <p className={`text-[14px] text-center ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                        톡클라우드에서 확인이 가능합니다
-                      </p>
                       {/* 확인 + 채팅방으로 보내기 버튼 */}
-                      <div className="flex gap-3 mt-8 w-full">
+                      <div className="flex gap-3 w-full">
                         <button
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[15px] font-semibold active:opacity-80 ${darkMode ? "text-gray-200" : "text-gray-700"}`}
@@ -1458,12 +1528,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           onClick={() => {
                             setMeetingSending(true);
                             const elapsed = meetingElapsed;
-                            const mm = Math.floor(elapsed / 60).toString().padStart(2, "0");
-                            const ss = (elapsed % 60).toString().padStart(2, "0");
                             setTimeout(() => {
-                              const sttText = "오늘 회의에서 논의된 주요 안건은 다음과 같습니다.\n\n1. 2분기 프로젝트 일정 확인\n2. 디자인 리뷰 피드백 반영\n3. 다음 주 목요일 중간 발표 준비";
+                              const sttText = "오늘 회의에서 논의된 주요 안건은 다음과 같습니다.\n\n1. 2분기 프로젝트 일정 확인 — 4월 초 킥오프 목표, 각 팀별 마일스톤 3월 말까지 확정 필요\n2. 디자인 리뷰 피드백 반영 — 메인 화면 카드 UI 간격 조정, 다크모드 컬러 톤 재검토. 채원님이 금요일까지 수정본 공유 예정\n3. 다음 주 목요일 중간 발표 준비 — 발표 자료는 민수님이 초안 작성, 슬라이드 15장 이내로. 리허설은 수요일 오후 3시\n4. QA 일정 조율 — 3월 넷째 주부터 내부 QA 시작, 외부 베타 테스트는 4월 둘째 주 예정. 지훈님이 테스트 케이스 정리 중\n5. 인프라 비용 최적화 — 현재 월 620만원 수준, 미사용 인스턴스 정리하면 15% 절감 가능. 은재님이 다음 주까지 리포트 작성\n6. 기타 — 신규 입사자 온보딩 가이드 업데이트 필요, 팀 워크숍 4월 셋째 주 금요일 오후로 잠정 확정";
                               if (onSendToMyChat) {
-                                onSendToMyChat(`🎙 음성 녹음 ${mm}:${ss}\n\n📝 STT 요약\n${sttText}`);
+                                onSendToMyChat("음성 메시지", { duration: elapsed, sttText });
                               }
                               setMeetingSending(false);
                               exitMeetingMode();
@@ -1477,19 +1545,21 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     </>
                   ) : (
                     <>
-                      {/* 녹음 표시 */}
-                      <div className="flex items-center gap-2 mb-6">
-                        <div className={`w-3 h-3 rounded-full ${meetingRecording ? "bg-red-500 animate-pulse" : darkMode ? "bg-gray-500" : "bg-gray-400"}`} />
-                        <p className={`text-[14px] font-medium ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
-                          {meetingRecording ? "녹음 중" : "대기 중"}
+                      <div className="flex flex-col items-center">
+                        {/* 녹음 표시 */}
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className={`w-3 h-3 rounded-full ${meetingRecording ? "bg-red-500 animate-pulse" : darkMode ? "bg-gray-500" : "bg-gray-400"}`} />
+                          <p className={`text-[14px] font-medium ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
+                            {meetingRecording ? "녹음 중" : "대기 중"}
+                          </p>
+                        </div>
+                        {/* 경과 시간 */}
+                        <p className={`text-[48px] font-bold tabular-nums tracking-tight ${darkMode ? "text-white" : "text-[#191919]"}`}>
+                          {formatElapsed(meetingElapsed)}
                         </p>
                       </div>
-                      {/* 경과 시간 */}
-                      <p className={`text-[48px] font-bold tabular-nums tracking-tight ${darkMode ? "text-white" : "text-[#191919]"}`}>
-                        {formatElapsed(meetingElapsed)}
-                      </p>
                       {/* 버튼들 */}
-                      <div className="flex gap-3 mt-8 w-full">
+                      <div className="flex gap-3 w-full">
                         {!meetingRecording ? (
                           <>
                             <button

@@ -305,3 +305,9 @@ img, svg {
 .animate-recording-dot-blink {
   animation: recording-dot-blink 1s ease-in-out infinite;
 }
+
+/* ── 팝업 슬라이드 업 진입 ── */
+@keyframes popup-slide-up {
+  0%   { transform: translateY(40px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
