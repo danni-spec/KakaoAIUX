@@ -52,15 +52,12 @@ export function StatusBar({ darkMode = false, bgColor }: { darkMode?: boolean; b
 
   const batteryFillWidth = Math.max(0, Math.min(17, level * 17));
 
-  // PWA standalone 모드: safe area 여백만 확보, Fake UI 숨김
+  // PWA standalone 모드: 투명 여백만 확보, Fake UI 숨김
   if (isStandalone) {
     return (
       <div
-        className="flex-shrink-0 transition-colors duration-500"
-        style={{
-          height: "env(safe-area-inset-top)",
-          backgroundColor: bgColor || (darkMode ? "#1c1c1e" : "#ffffff"),
-        }}
+        className="flex-shrink-0"
+        style={{ height: "env(safe-area-inset-top)" }}
       />
     );
   }

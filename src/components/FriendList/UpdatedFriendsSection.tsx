@@ -22,7 +22,7 @@ export function UpdatedFriendsSection({ darkMode = false, onFriendClick }: Updat
   return (
     <section className="mb-5 pt-1">
       <h2 className="text-[13px] font-medium text-gray-400 px-4 mb-3">
-        친구의 새소식 {UPDATED_FRIENDS.length}
+        업데이트 친구 {UPDATED_FRIENDS.length}
       </h2>
       <div className="flex gap-3 overflow-x-auto px-4 pt-2 pb-1 scrollbar-hide">
         {UPDATED_FRIENDS.map((friend) => (

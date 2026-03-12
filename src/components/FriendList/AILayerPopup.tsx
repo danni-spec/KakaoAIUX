@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import { SquircleAvatar } from "./SquircleAvatar";
 import {
   AI_SENT_BUBBLE_CLASS,
@@ -120,20 +121,47 @@ function generateChatSummary(messages: { sender: string; text: string }[]): stri
   const participants = [...new Set(messages.filter(m => m.sender !== "me").map(m => m.sender))];
   const topics: string[] = [];
   const allText = messages.map(m => m.text).join(" ");
-  if (allText.includes("루이비통") || allText.includes("립") || allText.includes("샤넬") || allText.includes("디올")) {
-    topics.push("루이비통 신상 가방 화제 → 가격 부담");
+
+  // 박채원: 쇼핑/립밤 대화 (루이비통, 샤넬, 디올, 에르메스)
+  if ((allText.includes("루이비통") || allText.includes("샤넬") || allText.includes("디올") || allText.includes("에르메스")) && (allText.includes("립") || allText.includes("가방"))) {
+    if (allText.includes("루이비통")) topics.push("루이비통 신상 가방 화제 → 가격 부담");
     if (allText.includes("샤넬")) topics.push("샤넬 립스틱 선물 받기로 함");
     if (allText.includes("디올")) topics.push("디올 립글로우 vs 샤넬 발색 비교");
     if (allText.includes("에르메스")) topics.push("에르메스 립밤 추천 → 요즘 인기템");
-  } else if (allText.includes("성수") || allText.includes("어디쯤") || allText.includes("약속")) {
-    if (allText.includes("성수")) topics.push("성수동에서 만나기로 함");
-    if (allText.includes("카페") || allText.includes("뚜흐느솔로")) topics.push("카페 뚜흐느솔로에서 약속");
-    if (allText.includes("어디쯤")) topics.push("서로 위치 확인 중");
-  } else {
-    messages.forEach(m => {
-      if (m.sender !== "me" && m.text.length > 5) topics.push(m.text);
-    });
   }
+  // 서은재: 성수동 뚜흐느솔로 카페 약속 + 위치 확인
+  else if ((allText.includes("뚜흐느솔로") || (allText.includes("성수") && allText.includes("카페"))) && (allText.includes("어디쯤") || allText.includes("출발") || allText.includes("도착"))) {
+    topics.push("성수동 카페 뚜흐느솔로 3시 약속");
+    topics.push("서로 위치 확인 중 (출발/도착 연락)");
+  }
+  // 이해수: 판교 약속, 픽업, 쿠폰
+  else if (allText.includes("판교") && (allText.includes("픽업") || allText.includes("쿠폰") || allText.includes("데리러"))) {
+    topics.push("오늘 저녁 7시 판교 약속");
+    if (allText.includes("쿠폰")) topics.push("할인 쿠폰 챙겨오기");
+    if (allText.includes("픽업") || allText.includes("데리러")) topics.push("사무실 앞 픽업으로 변경");
+  }
+  // 카카오 신입동기 모임방: 성수 vs 을지로 장소 투표
+  else if ((allText.includes("성수") && allText.includes("을지로")) || (allText.includes("동기 모임") && allText.includes("장소"))) {
+    topics.push("토요일 동기 모임 장소 논의 중");
+    topics.push("성수 vs 을지로 vs 한남동 의견 분분");
+    if (allText.includes("예산") || allText.includes("3만원")) topics.push("예산 인당 3만원 조건");
+  }
+  // 김민수, 강지훈: 회식 장소
+  else if (allText.includes("회식") && allText.includes("장소")) {
+    topics.push("다음 주 회식 장소 정하기");
+    if (allText.includes("판교")) topics.push("판교 쪽 제안");
+  }
+  // 마케팅 1팀: 캠페인 관련
+  else if (allText.includes("캠페인") || allText.includes("마케팅") || allText.includes("소재")) {
+    topics.push("3월 신규 캠페인 기획");
+    if (allText.includes("비즈보드")) topics.push("카카오 비즈보드 매체 전략");
+  }
+  // 기타: 메시지에서 핵심 문장 추출
+  else {
+    const meaningful = messages.filter(m => m.sender !== "me" && m.text.length > 8);
+    meaningful.slice(-5).forEach(m => topics.push(m.text));
+  }
+
   const header = participants.length > 0 ? `${participants.join(", ")}님과의 대화 요약:` : "대화 요약:";
   const body = topics.length > 0 ? topics.map((t, i) => `${i + 1}. ${t}`).join("\n") : "특별한 내용 없음";
   return `${header}\n${body}`;
@@ -141,22 +169,47 @@ function generateChatSummary(messages: { sender: string; text: string }[]): stri
 
 function generateNextReply(messages: { sender: string; text: string }[]): string {
   const allText = messages.map(m => m.text).join(" ");
-  // 장소 선택 고민 상황
-  if ((allText.includes("성수") || allText.includes("을지로") || allText.includes("한남")) && (allText.includes("어디") || allText.includes("할까") || allText.includes("골라"))) {
-    return "대화를 분석해봤어요! 지금 성수 vs 을지로로 의견이 갈리고 있네요. 예산 인당 3만원 조건이면 이렇게 말해보는 건 어때요?\n\n💬 \"을지로 노가리 골목 쪽은 인당 2만원대로 분위기도 좋고, 2차로 성수 카페 가는 건 어때? 두 군데 다 가면 다 만족하지 않을까ㅎㅎ\"\n\n양쪽 의견을 절충하면서 자연스럽게 정리할 수 있어요!";
+  const lastOther = [...messages].reverse().find(m => m.sender !== "me");
+  const lastText = lastOther?.text ?? "";
+
+  // 서은재: 카페 뚜흐느솔로 약속, 위치 확인 → "5분이면 도착" 직후
+  if ((allText.includes("뚜흐느솔로") || allText.includes("어디쯤")) && (allText.includes("도착") || allText.includes("5분"))) {
+    return "서은재님이 곧 도착한다고 했네요! 이렇게 답하면 자연스러워요.\n\n💬 \"오 좋아! 나 먼저 들어가서 자리 잡을게~\"\n\n또는\n\n💬 \"알았어! 기다릴게~\"";
+  }
+  // 박채원: 에르메스 립밤 추천 질문 직후
+  if (allText.includes("에르메스") && allText.includes("립밤") && lastText.includes("어때")) {
+    return "박채원님이 에르메스 립밤에 대해 물어봤어요. 맥락에 맞는 답변을 추천할게요!\n\n💬 \"오 궁금했어! 색이 어떤지 한번 봐줘~\"\n\n또는\n\n💬 \"나도 써봤는데 촉촉해서 좋더라! 로즈 컬러가 혈색 살려줘서 데일리로 쓰기 좋아\"";
+  }
+  // 박채원: 샤넬/디올 비교 대화
+  if ((allText.includes("샤넬") || allText.includes("디올")) && allText.includes("발색")) {
+    return "립 제품 비교 대화네요. 이렇게 이어가보세요!\n\n💬 \"오 고마워! 그럼 나는 디올로 해볼게 촉촉한 게 좋아서\"\n\n또는\n\n💬 \"발색 진한 거 좋아하면 샤넬이 더 나을 듯~\"";
+  }
+  // 이해수: 판교 약속, 픽업
+  if (allText.includes("판교") && (lastText.includes("조심") || lastText.includes("와"))) {
+    return "이해수님이 조심히 오라고 했네요. 이렇게 답하면 좋아요!\n\n💬 \"오케이~ 곧 갈게!\"\n\n또는\n\n💬 \"응 바로 출발~ 쿠폰 챙겼어!\"";
+  }
+  // 카카오 신입동기 모임방: 성수 vs 을지로 장소 투표
+  if ((allText.includes("성수") && allText.includes("을지로")) && (allText.includes("예산") || allText.includes("3만원"))) {
+    return "동기 모임 장소를 성수 vs 을지로로 좁혀놓은 상황이에요. 예산 3만원 조건에 맞는 절충안을 제안해보세요!\n\n💬 \"을지로 노가리 골목 쪽은 인당 2만원대로 분위기도 좋고, 2차로 성수 카페 가는 건 어때? 두 군데 다 가면 다 만족하지 않을까ㅎㅎ\"";
+  }
+  // 김민수, 강지훈: 회식 장소
+  if (allText.includes("회식") && allText.includes("장소")) {
+    return "회식 장소를 정하는 대화네요. 이렇게 제안해보세요!\n\n💬 \"판교역 근처 맛집 리스트 찾아볼게요\"\n\n또는\n\n💬 \"다음 주 화요일 저녁 어때요? 그때 다들 가능할까요?\"";
+  }
+  // 마케팅 1팀: 캠페인 관련 대화
+  if (allText.includes("캠페인") || allText.includes("소재") || allText.includes("마케팅")) {
+    return "3월 캠페인을 기획하는 대화네요. 이렇게 참여해보세요!\n\n💬 \"소재 시안 확인했어요! A안이 타겟 메시지에 더 맞는 것 같아요\"\n\n또는\n\n💬 \"매체별 예산 배분표 정리해서 공유드릴게요\"";
   }
   // 정산/돈 관련
-  if (allText.includes("정산") || allText.includes("송금") || allText.includes("만원")) {
-    return "정산 관련 대화네요. 이렇게 말해보는 건 어때요?\n\n💬 \"다들 확인했으면 토스로 보내줘~ 계좌는 카카오뱅크 ****야!\"\n\n깔끔하게 정리하면 좋을 것 같아요.";
+  if (allText.includes("정산") || allText.includes("송금")) {
+    return "정산 관련 대화네요. 이렇게 말해보는 건 어때요?\n\n💬 \"다들 확인했으면 토스로 보내줘~ 계좌는 카카오뱅크 ****야!\"";
   }
-  // 일반적인 선택 고민
-  if (allText.includes("할까") || allText.includes("어때") || allText.includes("고민")) {
-    const lastOther = [...messages].reverse().find(m => m.sender !== "me");
-    return `마지막으로 ${lastOther?.sender ?? "상대방"}이 의견을 물어봤네요. 자연스럽게 의견을 정리해서 답변하면 좋을 것 같아요!\n\n💬 "나는 개인적으로 둘 다 좋은데, 다수결로 정하자! 투표 올려볼까?"\n\n결정을 도와주는 역할을 하면 대화가 잘 마무리될 거예요.`;
+  // 일반적인 "할까?" "어때?" 질문
+  if (lastText.includes("할까") || lastText.includes("어때") || lastText.includes("?")) {
+    return `${lastOther?.sender ?? "상대방"}님이 의견을 물어봤어요. 맥락에 맞게 답해보세요!\n\n💬 "나는 개인적으로 둘 다 좋은데, 다수결로 정하자! 투표 올려볼까?"\n\n또는\n\n💬 "오 좋은 생각이다! 나도 찬성~"`;
   }
-  // 기본 폴백
-  const lastMsg = [...messages].reverse().find(m => m.sender !== "me");
-  return `${lastMsg?.sender ?? "상대방"}의 마지막 메시지를 기반으로, 가볍게 리액션하거나 의견을 더해보세요!\n\n💬 "오 좋은 생각이다! 나도 찬성~"\n\n자연스럽게 대화 흐름을 이어갈 수 있어요.`;
+  // 기본: 마지막 메시지에 리액션
+  return `${lastOther?.sender ?? "상대방"}님의 마지막 메시지에 맞는 답변을 추천할게요!\n\n💬 "오 좋아!"\n\n또는\n\n💬 "알았어! 고마워~"\n\n대화 흐름에 맞게 골라서 보내보세요.`;
 }
 
 // Web Speech API 타입
@@ -207,6 +260,7 @@ interface AILayerPopupProps {
   onMarkAllRead?: () => void; // 전체 읽음처리
   showNotificationList?: boolean; // 알림 아이콘 클릭 시 알림 리스트 뷰 표시
   onNotificationListClose?: () => void; // 알림 리스트 닫을 때 호출
+  onChipPlaceClick?: () => void; // "성수동 뚜흐느솔로" 칩 클릭 시 장소 레이어로 연결
 }
 
 // 맥락별 추천 칩
@@ -239,10 +293,10 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
 
 function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string, chatProductSuggestions?: string[]): string[] {
   const base = SUGGESTIONS_BY_CONTEXT[ctx];
-  // chatProductSuggestions 우선 적용 (채팅방 맥락별 맞춤 칩)
+  // chatProductSuggestions 우선 적용 (채팅방 맥락별 맞춤 칩) — 두 버튼을 칩 제일 앞으로
   if (chatProductSuggestions && chatProductSuggestions.length > 0 && (ctx === "chat-room" || ctx === "chat-room-new")) {
-    const front = base.filter((s) => !s.includes("궁합")).slice(0, chatPartnerName ? 2 : 1);
-    return [...front, ...chatProductSuggestions];
+    const rest = base.filter((s) => !s.includes("궁합")).slice(0, chatPartnerName ? 2 : 1);
+    return [...chatProductSuggestions, ...rest];
   }
   if (ctx === "chat-room-new" && !chatPartnerName) {
     return base;
@@ -373,21 +427,26 @@ function extractDestination(text: string): string {
 }
 
 const LOADING_MSGS = ["카카오페이와 연결 중입니다.", "결제 처리 중..."];
-const MEETING_LOADING_MSGS = ["음성을 텍스트로 변환 중...", "STT 요약 정리 중..."];
+const MEETING_LOADING_MSGS = ["음성을 텍스트로 변환 중...", "요약 정리 중...", "나챗방으로 보내는 중..."];
 
-function LoadingMessages({ dark, messages }: { dark?: boolean; messages?: string[] }) {
+function LoadingMessages({ dark, messages, title }: { dark?: boolean; messages?: string[]; title?: string }) {
   const msgs = messages || LOADING_MSGS;
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => {
       setIdx((prev) => (prev + 1) % msgs.length);
-    }, 1200);
+    }, 1000);
     return () => clearInterval(timer);
   }, [msgs.length]);
   return (
-    <div className="flex flex-col items-center justify-center py-16">
-      <img src="/voice-effect.png" alt="로딩" className="w-10 h-10 rounded-full animate-flip-y" />
-      <p className={`text-[15px] font-medium mt-4 ${dark ? "text-gray-200" : "text-[#191919]"}`}>
+    <div className="flex flex-col items-center justify-center py-16 px-6">
+      <img src="/voice-effect.png" alt="로딩" className="w-14 h-14 rounded-full animate-flip-y flex-shrink-0" />
+      {title && (
+        <p className={`text-[17px] font-semibold mt-6 mb-1 ${dark ? "text-white" : "text-[#191919]"}`}>
+          {title}
+        </p>
+      )}
+      <p className={`text-[15px] font-medium ${title ? "" : "mt-4"} ${dark ? "text-gray-300" : "text-[#767676]"}`}>
         {msgs[idx]}
       </p>
     </div>
@@ -413,7 +472,7 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: showNotiProp = false, onNotificationListClose: onNotiClose }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: showNotiProp = false, onNotificationListClose: onNotiClose, onChipPlaceClick }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimText, setInterimText] = useState("");
@@ -448,6 +507,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [notificationListView, setNotificationListView] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiTyping, setAiTyping] = useState(false);
@@ -477,6 +537,35 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     inputTextRef.current = val;
     _setInputText(val);
   }
+
+  // ── 키보드 감지: VisualViewport API로 키보드 높이 추적 ──
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    let rafId = 0;
+    const handleViewport = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        // visualViewport.height 줄어든 만큼 = 키보드 높이
+        // offsetTop: iOS Safari에서 키보드로 인해 뷰포트가 스크롤된 양 보정
+        const kbHeight = window.innerHeight - vv.height - vv.offsetTop;
+        setKeyboardOffset(kbHeight > 50 ? kbHeight : 0);
+
+        // 키보드 올라올 때 body 스크롤 방지
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      });
+    };
+
+    vv.addEventListener("resize", handleViewport);
+    vv.addEventListener("scroll", handleViewport);
+    return () => {
+      cancelAnimationFrame(rafId);
+      vv.removeEventListener("resize", handleViewport);
+      vv.removeEventListener("scroll", handleViewport);
+    };
+  }, []);
 
   // 채팅 메시지 추가 시 자동 스크롤 — 넘칠 때만 스크롤
   const scrollToBottom = useCallback(() => {
@@ -1041,6 +1130,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       exitMeetingMode();
       updateInputText("");
       setPopupLockedHeight(null);
+      setNotificationListView(false);
       return;
     }
     if (textMode || directionMode || darkmodeView || wishlistView || meetingMode) {
@@ -1239,6 +1329,13 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         onMouseDown={handleFloatMouseDown}
       >
         <div className={`absolute inset-0 rounded-full backdrop-blur-[4px]`} style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.15)" : "none" }} />
+        {/* 녹음 중일 때만 우측 상단 빨간 점 표시 (플로팅 모드 + 녹음 중) */}
+        {minimized && meetingRecording && (
+          <div
+            className="absolute top-[2px] right-[2px] w-2.5 h-2.5 rounded-full bg-red-500 animate-recording-dot-blink pointer-events-none z-10"
+            aria-hidden
+          />
+        )}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative w-[60px] h-[60px]">
             <img
@@ -1252,15 +1349,24 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
       <>
       {/* ── AI 레이어 카드 (외부 여백 좌우하 16px, p-4 제거로 중복 여백 해소) ── */}
-      <div
-        className="absolute transition-all duration-300"
+      <motion.div
+        className="absolute"
+        animate={{
+          bottom: isOpen ? 16 + keyboardOffset : -300,
+          opacity: isOpen && !minimized ? 1 : 0,
+          scale: minimized ? 0.3 : 1,
+          y: minimized ? 40 : 0,
+        }}
+        transition={{
+          bottom: { type: "spring", stiffness: 300, damping: 30, mass: 0.8 },
+          opacity: { duration: 0.2 },
+          scale: { duration: 0.3 },
+          y: { duration: 0.3 },
+        }}
         style={{
           left: 16,
           right: 16,
           top: (navActive || navArrived) ? 100 : undefined,
-          bottom: isOpen ? 16 : -300,
-          opacity: isOpen && !minimized ? 1 : 0,
-          transform: minimized ? "scale(0.3) translateY(40px)" : "scale(1) translateY(0)",
           transformOrigin: "bottom right",
           pointerEvents: isOpen && !minimized ? "auto" : "none",
         }}
@@ -1286,9 +1392,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             style={{
               backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)",
               boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
+              // 키보드가 올라오면 카드 최대 높이 제한 (가용 화면 - bottom 여백 - 상단 여백)
+              ...(keyboardOffset > 0 ? { maxHeight: `calc(100dvh - ${keyboardOffset + 32}px)` } : {}),
               // 대화 중일 때만 높이 고정 (채팅 영역 안정), 그 외에는 auto (팝업이 자연스럽게 줄어듦)
               ...(popupLockedHeight && chatMessages.length > 0 && !navActive && !navArrived && !meetingMode && !wishlistView && !choonsikCardView ? {
-                height: popupLockedHeight,
+                height: keyboardOffset > 0 ? undefined : popupLockedHeight,
                 display: "flex",
                 flexDirection: "column" as const,
               } : {}),
@@ -1312,7 +1420,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     </button>
                   )}
                   {meetingSending ? (
-                    <LoadingMessages dark={darkMode} messages={MEETING_LOADING_MSGS} />
+                    <LoadingMessages
+                      dark={darkMode}
+                      messages={MEETING_LOADING_MSGS}
+                      title="나챗방으로 전송 중"
+                    />
                   ) : meetingSaved ? (
                     <>
                       {/* 저장 완료 아이콘 */}
@@ -1354,6 +1466,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                               }
                               setMeetingSending(false);
                               exitMeetingMode();
+                              onClose();
                             }, 3000);
                           }}
                         >
@@ -1461,7 +1574,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               {/* ── 알림 & 일기 리스트 뷰 ── */}
               {notificationListView && !textMode && (
-                <div className="w-full px-4 pt-10 pb-4 pointer-events-auto overflow-y-auto scrollbar-hide" style={{ maxHeight: 600 }}>
+                <div className="w-full px-4 pt-10 pb-4 pointer-events-auto overflow-y-auto scrollbar-hide" style={{ maxHeight: keyboardOffset > 0 ? 600 - keyboardOffset : 600 }}>
                   <p className={`text-[18px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontFamily: "'Poppins', sans-serif", marginLeft: 4, marginTop: -12 }}><img src="/voice-effect.png" alt="" className="inline-block w-[26px] h-[26px] mr-1.5 -mt-0.5" />Kanana Journal</p>
 
                   {/* 오늘의 일기 디스크립션 */}
@@ -2198,6 +2311,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         }
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (text === "성수동 뚜흐느솔로" && onChipPlaceClick) {
+                            setTextSending(true);
+                            setLoadingMessage("장소 불러오는 중");
+                            setTimeout(() => {
+                              onChipPlaceClick();
+                            }, 800);
+                            return;
+                          }
                           updateInputText(text);
                           setTextMode(true);
                           handleTextSend();
@@ -2348,7 +2469,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             {/* /카드 본체 */}
         </div>
         {/* /relative */}
-      </div>
+      </motion.div>
 
       </>
 
@@ -2364,7 +2485,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
           />
           <div
             className="absolute"
-            style={{ left: 28, bottom: 80, zIndex: 71, pointerEvents: "auto" }}
+            style={{ left: 28, bottom: 80 + keyboardOffset, zIndex: 71, pointerEvents: "auto" }}
           >
             <div
               className={`rounded-[20px] overflow-hidden ai-layer-blur ${darkMode ? "dark" : ""}`}

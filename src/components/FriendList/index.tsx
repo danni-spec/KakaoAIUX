@@ -91,8 +91,14 @@ export function FriendList() {
     localStorage.setItem("darkMode", String(darkMode));
     document.body.classList.toggle("dark-mode", darkMode);
   }, [darkMode]);
+
+  // 채팅방 전환 시 장소 팝업 닫기
+  useEffect(() => {
+    setPlacePopupOpen(false);
+  }, [activeChatRoomId]);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [showNotificationList, setShowNotificationList] = useState(false);
+  const [placePopupOpen, setPlacePopupOpen] = useState(false);
   const aiInputRef = useRef<HTMLInputElement>(null);
   const circlePointsRef = useRef<{ x: number; y: number }[]>([]);
   const circleFiredRef = useRef(false);
@@ -346,7 +352,14 @@ export function FriendList() {
         {gnbTab === 1 && <ChatRoomList darkMode={darkMode} />}
       </div>
       {/* ── 채팅방 상세 (어떤 탭이든 활성 채팅방이 있으면 오버레이) ── */}
-      {activeChatRoomId && <ChatRoomDetail darkMode={darkMode} onOpenAI={openAIPopup} />}
+      {activeChatRoomId && (
+        <ChatRoomDetail
+          darkMode={darkMode}
+          onOpenAI={openAIPopup}
+          placePopupOpen={placePopupOpen}
+          onPlacePopupChange={setPlacePopupOpen}
+        />
+      )}
       <NotificationBanner
         isOpen={notificationOpen}
         onClose={() => setNotificationOpen(false)}
@@ -373,9 +386,11 @@ export function FriendList() {
         chatProductSuggestions={
           activeChatRoom?.name === "박채원"
             ? ["에르메스 립밤", "샤넬 립스틱", "디올 립글로우"]
-            : activeChatRoom?.name === "카카오 신입동기 모임방"
-              ? ["성수동 핫플"]
-              : undefined
+            : activeChatRoom?.name === "서은재"
+              ? ["성수동 뚜흐느솔로"]
+              : activeChatRoom?.name === "카카오 신입동기 모임방"
+                ? ["성수동 핫플"]
+                : undefined
         }
         chatRoomMessages={activeChatRoom?.messages.map(m => ({ sender: m.sender, text: m.text }))}
         onSendReply={activeChatRoomId ? (text) => chatRoomActions.sendMessage(activeChatRoomId, text) : undefined}
@@ -384,6 +399,14 @@ export function FriendList() {
         onMarkAllRead={chatRoomActions.markAllRead}
         showNotificationList={showNotificationList}
         onNotificationListClose={() => setShowNotificationList(false)}
+        onChipPlaceClick={
+          activeChatRoom?.name === "서은재"
+            ? () => {
+                setAiPopupOpen(false);
+                setPlacePopupOpen(true);
+              }
+            : undefined
+        }
         onCreateChatRoom={(members, initialMessage) => {
           const { openDirectChat, createGroupChat, sendMessage } = chatRoomActions;
           let room;

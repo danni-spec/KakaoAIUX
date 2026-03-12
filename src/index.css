@@ -33,11 +33,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-touch-callout: none;
-  background-color: #ffffff;
+  background-color: transparent;
 }
 
 body.dark-mode {
-  background-color: #1c1c1e;
+  background-color: transparent;
 }
 
 #root {
@@ -46,7 +46,6 @@ body.dark-mode {
   height: 100dvh;
   overflow: hidden;
   position: relative;
-  background-color: inherit;
 }
 
 /* ━━━ iOS auto-zoom 방지: 16px 미만 input → 자동 확대 → 가로 넘침 ━━━ */
@@ -295,4 +294,14 @@ img, svg {
 @keyframes typing-dot {
   0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
   30% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ── 플로팅 버튼 녹음 인디케이터 깜빡임 (1초 간격, opacity 1 → 0.3) ── */
+@keyframes recording-dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.animate-recording-dot-blink {
+  animation: recording-dot-blink 1s ease-in-out infinite;
 }
