@@ -43,7 +43,7 @@ const NAV_ITEMS = [
   { src: "/gnb-tab-5.png" },
 ];
 
-export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unreadCount = 0 }: { darkMode?: boolean; activeTab?: number; onTabChange?: (tab: number) => void; unreadCount?: number }) {
+export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unreadCount = 0, disabled = false }: { darkMode?: boolean; activeTab?: number; onTabChange?: (tab: number) => void; unreadCount?: number; disabled?: boolean }) {
   return (
     <nav
       className={[
@@ -55,6 +55,7 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
       style={{
         boxShadow: darkMode ? GLASS_SHADOW_DARK : GLASS_SHADOW_LIGHT,
         bottom: "calc(4px + env(safe-area-inset-bottom))",
+        pointerEvents: disabled ? "none" : undefined,
       }}
     >
       <div
@@ -73,13 +74,13 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
             <button
               key={i}
               className="flex-1 flex items-center justify-center h-12 relative"
-              onClick={() => onTabChange?.(i)}
+              onClick={() => i < 2 && onTabChange?.(i)}
             >
               {isActive && (
                 <span className={`absolute inset-0 rounded-[40px] ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.12]"}`} />
               )}
 
-              <div className="relative z-10 flex items-center justify-center w-[25px] h-[25px]">
+              <div className="relative z-10 flex items-center justify-center w-[25px] h-[25px]" style={i >= 2 ? { opacity: 0.2 } : undefined}>
                 <img
                   src={item.src}
                   alt=""

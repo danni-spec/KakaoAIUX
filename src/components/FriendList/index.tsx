@@ -365,7 +365,7 @@ export function FriendList() {
         onClose={() => setNotificationOpen(false)}
       />
       {/* absolute 오버레이 → backdrop-blur 실효 */}
-      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} unreadCount={totalUnread} />
+      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} unreadCount={totalUnread} disabled={aiPopupOpen} />
       <AILayerPopup
         isOpen={aiPopupOpen}
         onClose={() => {
