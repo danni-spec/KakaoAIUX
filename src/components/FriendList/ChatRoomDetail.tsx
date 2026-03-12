@@ -422,10 +422,7 @@ export function ChatRoomDetail({
   return (
     <div
       className={`fixed inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: kbHeight > 0 ? kbHeight : 0,
-      }}
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       {/* 헤더 */}
       <div
@@ -532,56 +529,81 @@ export function ChatRoomDetail({
         })}
       </div>
 
-      {/* 입력 영역 */}
-      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: kbHeight > 0 ? 4 : "max(8px, env(safe-area-inset-bottom))" }}>
-        <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
-          <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
-        </button>
-        <div className={`flex-1 flex items-center h-[36px] rounded-[18px] pl-[12px] pr-[6px] ${darkMode ? "bg-[#3a3a3c]" : "bg-[#f1f1f1]"}`}>
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            enterKeyHint="send"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            onFocus={onInputFocus}
-            onBlur={onInputBlur}
-            placeholder="메시지 입력"
-            className={`flex-1 outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
-            style={{ fontSize: "16px" }}
-          />
-          <button type="button" className="flex-shrink-0 ml-[4px]">
-            <img src="/emojiIcon.svg" alt="이모티콘" className={`w-[23px] h-[23px] ${darkMode ? "invert" : ""}`} />
+      {/* ── 하단 입력 바: 이중 레이어 구조 ──
+           외부(wrapper): 배경색을 기기 최하단(bottom:0)까지 채움
+           내부(controls): 입력 요소를 safe-area 위에 배치
+           키보드 활성 시: safe-area 패딩 제거 → 입력이 키보드에 밀착 */}
+      <div
+        className={`flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}
+        style={{ paddingBottom: kbHeight > 0 ? kbHeight : 0 }}
+      >
+        {/* 입력 컨트롤 */}
+        <div
+          className="flex items-center gap-[10px] px-[12px]"
+          style={{
+            paddingTop: 8,
+            paddingBottom: kbHeight > 0 ? 4 : 8,
+          }}
+        >
+          <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
+            <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
           </button>
-        </div>
-        <div className="flex-shrink-0 w-[32px] h-[32px]">
-          {text.trim() ? (
-            <button
-              type="button"
-              className="w-[32px] h-[32px] rounded-full bg-[#FEE500] flex items-center justify-center active:opacity-80"
-              onClick={handleSend}
-            >
-              <svg className="w-[18px] h-[18px] text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
+          <div className={`flex-1 flex items-center h-[36px] rounded-[18px] pl-[12px] pr-[6px] ${darkMode ? "bg-[#3a3a3c]" : "bg-[#f1f1f1]"}`}>
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="text"
+              name="chatmsg"
+              role="presentation"
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              enterKeyHint="send"
+              aria-autocomplete="none"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              onFocus={onInputFocus}
+              onBlur={onInputBlur}
+              placeholder="메시지 입력"
+              className={`flex-1 outline-none bg-transparent ${darkMode ? "text-white placeholder:text-gray-500" : "text-[#191919] placeholder:text-black/50"}`}
+              style={{ fontSize: "16px" }}
+            />
+            <button type="button" className="flex-shrink-0 ml-[4px]">
+              <img src="/emojiIcon.svg" alt="이모티콘" className={`w-[23px] h-[23px] ${darkMode ? "invert" : ""}`} />
             </button>
-          ) : (
-            <button type="button" className={`w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
-              <img src="/sharpIcon.svg" alt="샵" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
-            </button>
-          )}
+          </div>
+          <div className="flex-shrink-0 w-[32px] h-[32px]">
+            {text.trim() ? (
+              <button
+                type="button"
+                className="w-[32px] h-[32px] rounded-full bg-[#FEE500] flex items-center justify-center active:opacity-80"
+                onClick={handleSend}
+              >
+                <svg className="w-[18px] h-[18px] text-[#191919]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            ) : (
+              <button type="button" className={`w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
+                <img src="/sharpIcon.svg" alt="샵" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
+              </button>
+            )}
+          </div>
         </div>
+        {/* safe-area 바닥 채움: 키보드 없을 때만 표시, 배경색이 기기 최하단까지 연장 */}
+        {kbHeight === 0 && (
+          <div style={{ height: "env(safe-area-inset-bottom)" }} />
+        )}
       </div>
 
       {/* ── 상품 레이어 팝업 ── */}

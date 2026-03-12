@@ -2477,8 +2477,16 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       type="text"
                       inputMode="text"
                       enterKeyHint="send"
-                      autoComplete="off"
+                      name="aimsg"
+                      role="presentation"
+                      autoComplete="new-password"
+                      autoCorrect="off"
                       autoCapitalize="off"
+                      spellCheck={false}
+                      aria-autocomplete="none"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-form-type="other"
                       value={inputText}
                       placeholder={sendStatus ? sendStatus : textSending ? (loadingMessage || "처리 중...") : giftResult ? `${giftResult}에게 선물 메시지 보내기` : replyMode ? "이해수에게 답장" : "카나나에게 요청하기"}
                       className={`w-full text-base outline-none bg-transparent ${darkMode ? "text-gray-100" : "text-gray-900"} ${sendStatus ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : textSending ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : (darkMode ? "placeholder:text-gray-400" : "placeholder:text-gray-900/40")}`}
