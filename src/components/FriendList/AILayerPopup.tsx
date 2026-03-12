@@ -1299,8 +1299,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <div
         className="absolute inset-0"
         style={{ pointerEvents: isOpen && !minimized ? "auto" : "none" }}
-        onClick={handleClose}
-        onTouchEnd={handleClose}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleClose(); }}
+        onTouchStart={(e) => { if (isOpen && !minimized) e.stopPropagation(); }}
+        onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); handleClose(); }}
         aria-hidden="true"
       />
 
