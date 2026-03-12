@@ -533,7 +533,7 @@ export function ChatRoomDetail({
       </div>
 
       {/* 입력 영역 */}
-      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: kbHeight > 0 ? 4 : 8 }}>
+      <div className={`flex items-center gap-[10px] px-[12px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`} style={{ paddingTop: 8, paddingBottom: kbHeight > 0 ? 4 : "max(8px, env(safe-area-inset-bottom))" }}>
         <button type="button" className={`flex-shrink-0 w-[32px] h-[32px] rounded-full flex items-center justify-center ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.06]"}`}>
           <img src="/plusIcon.svg" alt="추가" className={`w-[20px] h-[20px] ${darkMode ? "invert" : ""}`} />
         </button>
