@@ -1,32 +1,36 @@
 import { SquircleAvatar } from "./SquircleAvatar";
+import { usePersona, type PersonaId } from "../../App";
 
 interface BirthdayFriendsSectionProps {
   darkMode?: boolean;
 }
 
-const BIRTHDAY_FRIENDS = [
-  {
-    name: "이나영",
-    subtitle: "오늘 · 이 친구의 위시리스트가 있어요",
-    birthdayIcon: true,
-    photo: "/profile-ieun.png",
-  },
-  {
-    name: "김지훈",
-    subtitle: "어제 · 내게 생일 선물 준 친구",
-    birthdayIcon: true,
-    photo: "/profile-dohyun.png",
-  },
-];
+const BIRTHDAY_BY_PERSONA: Record<PersonaId, { name: string; subtitle: string; birthdayIcon: boolean; photo: string }[]> = {
+  golf: [
+    { name: "다니엘", subtitle: "오늘 · 이 친구의 위시리스트가 있어요", birthdayIcon: true, photo: "/profile-daniel.png" },
+    { name: "마르코", subtitle: "어제 · 내게 생일 선물 준 친구", birthdayIcon: true, photo: "/profile-marco.png" },
+  ],
+  shopping: [
+    { name: "김영지", subtitle: "오늘 · 선물 위시리스트를 확인해 보세요", birthdayIcon: true, photo: "/profile-yerin.png" },
+    { name: "민수", subtitle: "내일 · 생일 선물 준비하셨나요?", birthdayIcon: true, photo: "/profile-minsu.png" },
+  ],
+  appointment: [
+    { name: "태형", subtitle: "오늘 · 모임에서 축하해 주세요 🎂", birthdayIcon: true, photo: "/profile-taehyung.png" },
+    { name: "김민수", subtitle: "어제 · 생일 축하 메시지를 보내보세요", birthdayIcon: true, photo: "/profile-kimminsu.png" },
+  ],
+};
 
 export function BirthdayFriendsSection({ darkMode = false }: BirthdayFriendsSectionProps) {
+  const persona = usePersona();
+  const friends = BIRTHDAY_BY_PERSONA[persona.id];
+
   return (
     <section className="mb-5">
       <h2 className="text-[13px] font-medium text-gray-400 px-4 mb-3">
-        생일인 친구 {BIRTHDAY_FRIENDS.length}
+        생일인 친구 {friends.length}
       </h2>
       <div>
-        {BIRTHDAY_FRIENDS.map((friend) => (
+        {friends.map((friend) => (
           <div
             key={friend.name}
             className={`flex items-center gap-3 px-4 py-2 cursor-pointer ${darkMode ? "active:bg-white/10" : "active:bg-gray-50"}`}
@@ -59,7 +63,7 @@ export function BirthdayFriendsSection({ darkMode = false }: BirthdayFriendsSect
           </div>
         ))}
 
-        {/* 더보기 카드 — 🐱 플레이스홀더도 스퀘어클 */}
+        {/* 더보기 카드 */}
         <div className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${darkMode ? "hover:bg-white/5 active:bg-white/10" : "hover:bg-gray-50 active:bg-gray-100"}`}>
           <img
             src="/giftSquircle.png"

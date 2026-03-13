@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { SquircleAvatar } from "./SquircleAvatar";
+import { IOSKeyboard } from "./IOSKeyboard";
+import { usePersona, type PersonaId } from "../../App";
+import CircleToSearchOverlay from "./CircleToSearchOverlay";
 import {
   AI_SENT_BUBBLE_CLASS,
   AI_SENT_BUBBLE_STYLE,
@@ -14,6 +17,7 @@ interface ChatMessage {
   role: "user" | "ai";
   text: string;
   timestamp: number;
+  image?: string;
 }
 
 // ── AI 응답 함수 (나중에 OpenAI API로 교체 가능) ──
@@ -28,193 +32,290 @@ interface ChatMessage {
 //     const data = await res.json();
 //     return data.choices[0].message.content;
 //   }
+// ── Intent Classification ──
+type Intent = "briefing" | "fact-check" | "summary" | "next-reply" | "general";
+
+function classifyIntent(message: string): Intent {
+  const m = message.toLowerCase();
+  // 다음 답장 추천
+  if (/뭐라고\s*할까|뭐라\s*할까|다음에\s*뭐|뭐라고할까|뭐라할까/.test(m)) return "next-reply";
+  // 브리핑/저널 요청
+  if (/브리핑|저널|오늘\s*하루|모닝|일정\s*정리|일정\s*알려|오늘\s*뭐\s*해|오늘\s*뭐\s*있|하루\s*요약/.test(m)) return "briefing";
+  // 사실 확인 (누가/뭐/언제/어디 + "~가 뭐야" 패턴)
+  if (/누가.+했|누가.+보냈|마지막\s*대화|마지막\s*메시지|언제.+했|뭐라고\s*했|뭐라\s*했|어디서|몇\s*시에|결혼기념일|생일이?\s*언제|약속이?\s*언제|회의\s*언제|.+(?:가|이)\s*뭐야|.+(?:가|이)\s*뭐예요|.+(?:가|이)\s*뭔가요/.test(m)) return "fact-check";
+  // 요약 요청
+  if (/요약|정리해|알려줘.*내용|뭐라고.*했|무슨\s*얘기|무슨\s*대화|대화\s*내용/.test(m)) return "summary";
+  return "general";
+}
+
+// ── 브리핑/저널 데이터를 텍스트로 추출 (persona별) ──
+function getBriefingText(personaId: string): string {
+  if (personaId === "golf") return [
+    "골프 라운딩 일정: 오늘 아침 6시 춘천 라비에벨 CC 골프 약속. 분당에서 약 2시간 소요, 4시 출발 필요.",
+    "날씨: 춘천 현재 16도, 최고 16도, 최저 4도. 바람막이 필수.",
+    "복장 추천: 기능성 바람막이 + 얇은 기모 이너 조합. 라운딩 후 기온 상승하니 레이어드 추천.",
+    "오후 미팅: 오후 3시 AI 전략 리뷰 미팅, 본관 12층 대회의실, 참석자 7명.",
+    "결혼기념일: 오늘 25주년 결혼기념일. 오후 5시까지 복귀 필요. 판교 스시이도 7시 예약 가능.",
+    "기념일 선물: 해수님이 조말론 우드 세이지 앤 씨 솔트 향수 자주 언급. 카카오쇼핑 최저가 152,000원.",
+  ].join("\n");
+  if (personaId === "shopping") return [
+    "쇼핑 추천: 관심 등록한 나이키 에어맥스 97이 15% 할인 중, 오늘 자정까지 한정 세일.",
+    "날씨: 서울 22도, 최고 22도, 최저 13도. 가벼운 외투면 충분.",
+    "스타일 추천: 오늘 날씨에 맞는 봄 데일리룩 코디 준비됨.",
+    "선물 리마인더: 다음 주 친구 생일. 위시리스트 아이템으로 선물 준비 가능.",
+    "배송 현황: 어제 주문한 무신사 패키지 배송 중, 오후 3시 도착 예정.",
+  ].join("\n");
+  return [
+    "저녁 약속: 오늘 저녁 7시 강남역 근처 대학 동기 모임. 장소 미정.",
+    "날씨: 서울 19도, 최고 19도, 최저 11도. 저녁엔 쌀쌀하니 겉옷 필요.",
+    "약속 준비: 모임 장소 후보 3곳을 대학동기 단톡방에 투표로 공유 가능.",
+    "교통 안내: 분당에서 강남역까지 약 40분 소요, 6시 20분 출발 추천.",
+    "모임 알림: 대학동기 단톡방에 확인 메시지 전송 가능.",
+  ].join("\n");
+}
+
+function getJournalText(personaId: string): string {
+  if (personaId === "golf") return [
+    "라운딩 스코어 기록: 라비에벨 CC 라운딩 스코어 기록 가능. 지난달 대비 퍼팅 성공률 상승 중.",
+    "함께한 멤버: 골프패밀리 멤버들과 라운딩 사진 앨범 정리 가능.",
+    "기념일 저녁 준비: 판교 스시이도 7시 예약 확정, 조말론 향수 선물 포장 완료.",
+    "다음 라운딩: 골프패밀리 멤버들 다음 주말 라운딩 희망. 일정 투표 가능.",
+    "하루 요약: 새벽 라운딩 → 오후 미팅 → 저녁 결혼기념일 디너.",
+  ].join("\n");
+  if (personaId === "shopping") return [
+    "오늘의 쇼핑 리뷰: 오늘 구경한 아이템들 정리, 관심 목록 추가 가능.",
+    "가격 변동 알림: 찜해둔 상품 3개 가격 변동됨.",
+    "스타일 기록: 마음에 든 코디 저장, 스타일북 생성 가능.",
+    "포인트 현황: 카카오페이 포인트 2,350원 보유.",
+  ].join("\n");
+  return [
+    "모임 후기: 대학 동기 모임 후기 작성 가능.",
+    "사진 정리: 모임 사진 앨범 정리 후 단톡방 공유 가능.",
+    "감사 인사: 모임 준비한 친구에게 감사 인사 전달 가능.",
+    "다음 약속: 다음 모임 일정 투표 생성 가능.",
+    "맛집 기록: 방문한 식당 카카오맵 리뷰 남기기 가능.",
+  ].join("\n");
+}
+
+// ── Intent별 시스템 프롬프트 생성 ──
+function buildSystemPrompt(intent: Intent, chatContext: string, briefingText: string, journalText: string): string {
+  const base = `[기본 규칙]
+너는 카카오톡 AI 어시스턴트다. 친절한 존댓말로 답변해.
+- 카카오톡 메시지처럼 짧고 명확한 구어체(존댓말).
+- TTS용: 특수문자, 이모지, 기호 사용 금지. 문장을 짧게 끊어.`;
+
+  if (intent === "briefing") {
+    return `${base}
+
+[역할] 오늘의 브리핑을 아래 순서대로 구어체로 전달해.
+1. 반드시 "좋은 아침입니다 부장님!"으로 시작
+2. 가장 중요한 일정을 한 문장으로
+3. 나머지 일정을 시간순으로 짧게 나열
+- 데이터에 있는 제목과 핵심 내용만 리스트업.
+
+[오늘의 브리핑 데이터]
+${briefingText}
+
+[오늘의 저널 데이터]
+${journalText}
+${chatContext}`;
+  }
+
+  if (intent === "fact-check") {
+    return `${base}
+
+[역할] 질문에 해당하는 사실을 아래 데이터에서 찾아 답변해.
+- 데이터에 관련 내용이 있으면: 해당 정보를 바탕으로 친절하게 답변.
+- 데이터에 관련 내용이 없으면: 절대 "기록이 없습니다"라고 하지 말고, 너의 기본 지식을 활용하여 답변해.
+- 채팅 내역 참조 시: 해당 키워드 포함된 메시지를 발췌하여 전달.
+
+[오늘의 브리핑 데이터]
+${briefingText}
+
+[오늘의 저널 데이터]
+${journalText}
+${chatContext}`;
+  }
+
+  if (intent === "next-reply") {
+    return `${base}
+
+[역할] 현재 열린 채팅방의 대화 흐름을 분석하여, 사용자가 다음에 보내면 좋을 자연스러운 답장 메시지 1개를 추천해.
+- 대화 맥락(주제, 분위기, 상대방의 마지막 메시지)을 고려해서 자연스러운 답장을 만들어.
+- 반드시 이 포맷으로 추천 메시지를 포함해: 💬 "추천 메시지 내용"
+- 추천 메시지 앞에 왜 이 답장이 좋은지 한 줄로 간단히 설명해.
+- 추천 메시지는 실제 카톡 대화처럼 자연스러운 반말/존댓말(대화 분위기에 맞게).
+${chatContext}`;
+  }
+
+  if (intent === "summary") {
+    return `${base}
+
+[역할] 요청된 대화/상황을 데이터에서 발췌하여 친절한 형식으로 요약해.
+- 2~3문장 이내로 압축. 전체 나열 금지.
+- 누가 무엇을 했는지 주체를 명확히.
+- 일정/약속/장소/시간은 데이터 원문 그대로 추출.
+
+[오늘의 브리핑 데이터]
+${briefingText}
+
+[오늘의 저널 데이터]
+${journalText}
+${chatContext}`;
+  }
+
+  // general — 채팅 기록에 없어도 LLM 지식으로 답변
+  return `${base}
+
+[역할] 질문에 친절하게 답변해.
+- 아래 데이터에 관련 내용이 있으면 데이터를 바탕으로 답변.
+- 데이터에 관련 내용이 없으면: 절대 "기록이 없습니다"라고 하지 말고, 너의 기본 지식을 활용하여 자연스럽게 답변해.
+- 일반 상식, 날씨, 요리법, 검색성 질문 등 자유롭게 답변 가능.
+
+[오늘의 브리핑 데이터]
+${briefingText}
+
+[오늘의 저널 데이터]
+${journalText}
+${chatContext}`;
+}
+
 async function getAIResponse(
   userMessage: string,
   _history: ChatMessage[],
   chatRoomMessages?: { sender: string; text: string }[],
-  allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[],
+  allChatRooms?: { name: string; unreadCount: number; lastMessage: string; messages?: { sender: string; text: string }[] }[],
+  personaId: string = "golf",
 ): Promise<string> {
-  // 시뮬레이션: 짧은 딜레이 후 응답
-  await new Promise((r) => setTimeout(r, 500));
 
-  // 간단한 키워드 매칭 응답
   const lower = userMessage.toLowerCase();
-  if (lower.includes("안녕") || lower.includes("하이") || lower.includes("hello")) {
-    return "안녕하세요! 카나나예요 😊 저는 카카오톡 안에서 여러분의 일상을 더 편하고 재미있게 만들어 드리는 AI 어시스턴트예요. 대화 요약, 선물 추천, 길 찾기, 다크 모드 전환 같은 것들을 도와드릴 수 있어요. 무엇이든 편하게 물어보세요!";
+
+  // ── 브리핑 프리셋 (고정 텍스트 — 환각 방지) ──
+  if (personaId === "golf" && /브리핑/.test(lower)) {
+    return `오늘 브리핑 드리겠습니다.\n먼저 오전 일정입니다. 오늘 오전 6시 춘천 라비에벨 CC에서 골프 라운딩 예정입니다. 정자동 댁에서 이동 시 약 한 시간 반 정도 소요되어 새벽 4시쯤 출발하시면 무리 없을 것 같습니다. 현재 춘천 기온은 6도에 약한 바람이 있어 라운딩 시 바람막이와 가벼운 이너 착장을 추천드립니다.\n다음 오후 일정입니다. 오후 3시 아지트 A동 9층 라이언 회의실에서 AI 전략 리뷰 미팅이 예정되어 있습니다. 회의 자료는 카카오 캔버스에 미리 정리해 두었습니다.\n이상입니다, 안전하게 다녀오시기 바랍니다.`;
   }
-  if (lower.includes("날씨")) {
-    return "오늘 서울 날씨는 맑음, 기온 12°C예요. 외출할 때 가벼운 겉옷을 챙기세요!";
-  }
-  if (lower.includes("추천")) {
-    return "어떤 종류의 추천을 원하시나요? 맛집, 선물, 영화 등 구체적으로 말씀해주세요!";
-  }
-  if (lower.includes("고마워") || lower.includes("감사")) {
-    return "천만에요! 또 필요한 게 있으면 언제든 말씀해주세요 :)";
-  }
-  // 읽음처리 — 실제 채팅방 데이터 기반 응답
+
+  // ── 기능 실행용 프리셋 (UI 안내만 필요한 것) ──
   if (lower.includes("읽음처리") || lower.includes("읽음 처리")) {
     const unreadRooms = (allChatRooms || []).filter(r => r.unreadCount > 0);
     const totalUnread = unreadRooms.reduce((sum, r) => sum + r.unreadCount, 0);
     if (unreadRooms.length > 0) {
-      return `${unreadRooms.length}개 채팅방의 안읽은 메시지 ${totalUnread}건을 모두 읽음 처리했어요!\n${unreadRooms.map(r => `• ${r.name} — ${r.unreadCount}건`).join("\n")}`;
+      return `${unreadRooms.length}개 채팅방의 안읽은 메시지 ${totalUnread}건을 모두 읽음 처리했어요!\n${unreadRooms.map(r => `${r.name} ${r.unreadCount}건`).join(", ")}`;
     }
     return "안읽은 메시지가 없어요! 모두 확인된 상태입니다.";
   }
-  // 새 채팅방 만들기 — 대화 상대 미지정 시 안내
   if (lower.includes("채팅방 만들") || lower.includes("채팅방만들") || lower.includes("톡방 만들") || lower.includes("대화방 만들")) {
-    return "새 채팅방을 만드려면 누구랑 만들지 알려줘! 예를 들어 \"이해수랑 채팅방 만들어줘\" 또는 \"김민수, 박채원 단톡방 만들어줘\"처럼 말해주면 바로 만들어줄게.";
+    return "누구랑 만들지 알려줘! 예: 민수랑 채팅방 만들어줘";
   }
-  // 자연어 채팅 의도 — 이름 감지되면 바로 생성됨, 여기는 이름 없는 경우
-  if ((lower.includes("톡하고") || lower.includes("대화하고") || lower.includes("얘기하고") || lower.includes("연락하고")) && (lower.includes("싶") || lower.includes("하자") || lower.includes("할래"))) {
-    return "누구와 대화하고 싶은지 알려주세요! 예를 들어 \"민수랑 톡하고 싶어\" 또는 \"채원이한테 연락해줘\"처럼 말해주면 바로 채팅방을 만들어줄게요.";
+  if (/결혼\s*기념일|결혼/.test(lower)) {
+    return `결혼기념일 준비는 평소 자주 가시는 판교 스시이도 예약 가능 여부를 확인 중입니다.\n선물 관련해서는 사모님께서 대화에서 종종 언급하신 반클리프 브레이슬릿 플럼 블로썸이 확인되는데, 현재 약 사백육십육만 원 정도이며 카카오 선물하기에서도 주문 가능합니다.\n[btn:예약 확인][btn:주문하기]`;
   }
-  // 메시지 보내기 — 본문 없이 수신자만 지정된 경우
-  const msgMatch = userMessage.match(/(.+?)에게\s*(?:메시지|문자)\s*(?:보내|전송)/);
-  if (msgMatch && !userMessage.match(/(.+?)에게\s+(.+?)(?:라고|이라고|다고)\s*(?:메시지|문자)/)) {
-    const recipient = msgMatch[1]?.trim();
-    if (recipient) {
-      return `${recipient}에게 보낼 메시지를 입력해주세요. 음성 또는 텍스트로 작성할 수 있어요. 전달할 내용을 알려주시면 최근 대화를 참고해서 자연스럽게 보내드릴게요!`;
-    }
+  if (/분조카|분좋카/.test(lower)) {
+    return `분좋카는 '분위기 좋은 카페'의 줄임말이에요. 딸 지민이가 대화에서 사용한 신조어입니다!`;
   }
-  if (lower.includes("첫 인사") || lower.includes("인사말")) {
-    return "이런 첫 인사는 어때요?\n💬 \"안녕! 요즘 어떻게 지내? 오랜만에 연락하니까 반갑다 😊\"\n가볍고 자연스러운 톤이라 부담 없이 대화를 시작할 수 있어요!";
+  if (/챙겨\s*오|챙겨\s*가|챙겨오래|뭐\s*챙겨|챙기래|챙겨갈\s*게/.test(lower)) {
+    return `오늘 오전 10시 15분 대화 기억하시죠? 사모님이 '서재 책상 위에 있는 스시이도 20% 할인 쿠폰 꼭 챙겨와'라고 하셨어요. 오늘 결혼 25주년 기념일이라 예약하신 곳이잖아요!\n예약하신 식당 바로 옆에 '블루보틀' 있는 거 아시죠? 지금 부장님 톡채널 확인해 보니까 블루보틀 10% 할인 쿠폰이 들어있네요. 식사 후에 '당신 좋아하는 커피 쿠폰 챙겨왔어, 잠깐 들르자'라고 하시면 센스 대폭발이죠!\n쿠폰은 지금 바로 블루보틀 톡채널로 보내드릴게요.`;
   }
-  if (lower.includes("이모티콘 추천") || lower.includes("이모티콘추천")) {
-    return "대화 분위기에 맞는 이모티콘을 골라봤어요!\n🐶 라이언 — 귀여운 리액션에 딱\n🎉 춘식이 축하 — 좋은 소식에 바로 쓸 수 있어요\n😆 무지 빵터짐 — 웃긴 얘기에 찰떡\n카카오 이모티콘샵에서 더 많이 구경할 수 있어요!";
-  }
-  if (lower.includes("궁합")) {
-    return "두 분의 궁합을 봐드릴게요!\n💛 대화 궁합 92점\n답장 속도가 비슷하고, 서로 질문과 리액션의 균형이 잘 맞아요. 특히 약속을 잡을 때 배려하는 표현이 많아서 소통 스타일이 잘 맞는 편이에요!";
-  }
-  if (lower.includes("대화 요약") || lower.includes("메시지 요약") || lower.includes("요약해")) {
-    if (chatRoomMessages && chatRoomMessages.length > 0) {
-      return generateChatSummary(chatRoomMessages);
-    }
-    // chat-list 맥락: 전체 채팅방 요약
-    return "📌 이해수 — 오늘 저녁 7시 판교 약속, 픽업 장소 변경됨\n📌 박채원 — 에르메스 립밤 추천, 샤넬 vs 디올 비교 중\n📌 서은재 — 성수동 카페 뚜흐느솔로 3시 약속\n📌 신입동기 모임방 — 토요일 모임 장소 성수 vs 을지로 투표 중";
-  }
-  if (lower.includes("성수동 핫플") || lower.includes("성수 핫플")) {
-    return "성수동 인기 장소 추천해드릴게요!\n🍽 르뱅 — 브런치 맛집, 주말 웨이팅 30분\n☕ 센터커피 — 로스터리 카페, 넓은 좌석\n🍷 을지다락 — 분위기 좋은 와인바\n인당 예산 3만원이면 르뱅이나 센터커피가 딱이에요!";
-  }
-  if (lower.includes("에르메스 립밤")) {
-    return "에르메스 로즈 립밤은 시어버터 베이스로 촉촉하게 밀착되고, 은은한 로즈 컬러가 자연스러운 혈색을 만들어줘요. 현재 최저가는 카카오쇼핑 52,000원이에요.";
-  }
-  if (lower.includes("샤넬 립스틱")) {
-    return "채원님이 선물 받기로 한 샤넬 립스틱이에요. 샤넬 루쥬 알뤼르는 고발색에 촉촉한 텍스처로 인기가 많아요. 현재 최저가는 카카오쇼핑 45,000원이에요.";
-  }
-  if (lower.includes("디올 립글로우")) {
-    return "대화에서 비교했던 디올 립글로우예요. 촉촉한 발색과 자연스러운 컬러 체인지가 특징이에요. 현재 최저가는 네이버 42,000원이에요.";
-  }
-  if (lower.includes("뭐라고") || lower.includes("뭐라 할") || lower.includes("뭐라 말") || lower.includes("다음에 뭐")) {
-    if (chatRoomMessages && chatRoomMessages.length > 0) {
-      return generateNextReply(chatRoomMessages);
-    }
-    return "대화 내용이 없어서 추천이 어려워요. 채팅방에서 다시 시도해주세요!";
+  if (/오후\s*미팅|미팅\s*준비/.test(lower)) {
+    return `오후 3시에 아지트 A동 12층 라이언 회의실에서 AI 전략 리뷰 미팅이 예정되어 있습니다. 회의록과 KPI 자료는 카카오 캔버스에 미리 정리해 두었습니다.`;
   }
 
-  if (lower.includes("일기") && lower.includes("써")) {
-    if (lower.includes("감사")) {
-      return "📝 오늘의 감사일기\n\n오늘 하루도 감사한 일이 참 많았어요.\n\n1. 아침에 따뜻한 커피 한 잔으로 하루를 시작할 수 있어서 감사해요\n2. 점심에 동료들과 맛있는 식사를 함께해서 좋았어요\n3. 퇴근길 날씨가 선선해서 기분 좋은 산책을 할 수 있었어요\n\n작은 것에도 감사할 줄 아는 하루였습니다 ☺️";
+  // ── Intent 분류 → 맞춤 프롬프트로 OpenAI API 호출 ──
+  const intent = classifyIntent(userMessage);
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (apiKey) {
+    // 채팅 컨텍스트 구성
+    let chatContext = "";
+    if (intent === "next-reply" && chatRoomMessages && chatRoomMessages.length > 0) {
+      // next-reply: 현재 열린 채팅방 대화를 우선 참조
+      chatContext = "\n\n[현재 열린 채팅방 대화]\n" + chatRoomMessages.slice(-20).map(m =>
+        `${m.sender === "me" ? "나" : m.sender}: ${m.text}`
+      ).join("\n");
+    } else if (allChatRooms && allChatRooms.length > 0) {
+      if (intent === "fact-check" || intent === "summary") {
+        // 키워드 관련 메시지만 발췌 (최대 20개)
+        const keywords = userMessage.replace(/[?？은는이가을를에서의도]+/g, "").split(/\s+/).filter(w => w.length >= 2);
+        const relevant: string[] = [];
+        for (const room of allChatRooms) {
+          const matched = (room.messages || []).filter(m =>
+            keywords.some(kw => m.text.includes(kw) || m.sender.includes(kw))
+          );
+          if (matched.length > 0) {
+            relevant.push(`[${room.name}]\n` + matched.slice(-10).map(m =>
+              `  ${m.sender === "me" ? "나(김부장)" : m.sender}: ${m.text}`
+            ).join("\n"));
+          }
+        }
+        if (relevant.length > 0) {
+          chatContext = "\n\n[관련 채팅 내역]\n" + relevant.join("\n\n");
+        } else {
+          // 키워드 매칭 실패 시 최근 대화로 폴백
+          chatContext = "\n\n[최근 채팅 데이터]\n" + allChatRooms.slice(0, 5).map(room => {
+            const msgs = room.messages?.slice(-5).map(m =>
+              `  ${m.sender === "me" ? "나(김부장)" : m.sender}: ${m.text}`
+            ).join("\n") || "";
+            return `[${room.name}] (안읽은 ${room.unreadCount}건)\n${msgs}`;
+          }).join("\n\n");
+        }
+      } else {
+        // briefing / general → 채팅방별 최근 메시지 5개로 제한 (속도 향상)
+        chatContext = "\n\n[카카오톡 채팅방 데이터]\n" + allChatRooms.map(room => {
+          const msgs = room.messages?.slice(-5).map(m =>
+            `  ${m.sender === "me" ? "나(김부장)" : m.sender}: ${m.text}`
+          ).join("\n") || "";
+          return `[${room.name}] (안읽은 ${room.unreadCount}건)\n${msgs}`;
+        }).join("\n\n");
+      }
+    } else if (chatRoomMessages && chatRoomMessages.length > 0) {
+      chatContext = "\n\n[현재 열린 채팅방 대화]\n" + chatRoomMessages.slice(-15).map(m =>
+        `${m.sender === "me" ? "나(김부장)" : m.sender}: ${m.text}`
+      ).join("\n");
     }
-    return "📝 오늘의 일기\n\n오늘은 평소보다 바쁜 하루였어요. 오전에 팀 미팅이 있었고, 오후에는 디자인 리뷰를 진행했어요. 점심에는 동료들과 판교역 근처 맛집을 다녀왔는데, 분위기가 정말 좋았어요.\n\n퇴근 후에는 친구와 카톡으로 주말 약속을 잡았어요. 성수동 카페에서 만나기로 했는데 벌써부터 기대돼요!\n\n내일은 조금 여유롭게 보내고 싶은 하루입니다 🌙";
+
+    const briefingText = getBriefingText(personaId);
+    const journalText = getJournalText(personaId);
+    const systemPrompt = buildSystemPrompt(intent, chatContext, briefingText, journalText);
+
+    // intent별 토큰/온도 조정 (낮은 temperature로 환각 억제, 짧은 토큰으로 빠른 응답)
+    const maxTokens = intent === "briefing" ? 250 : intent === "next-reply" ? 150 : intent === "summary" ? 200 : intent === "fact-check" ? 200 : 200;
+    const temperature = intent === "next-reply" ? 0.7 : 0.15;
+
+    try {
+      console.log("[GPT] calling API, intent:", intent, "msg:", userMessage.slice(0, 50));
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          max_tokens: maxTokens,
+          temperature,
+        }),
+      });
+      console.log("[GPT] response status:", res.status);
+      if (res.ok) {
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content;
+        console.log("[GPT] content:", content?.slice(0, 80));
+        if (content) return content;
+      } else {
+        const errText = await res.text();
+        console.error("[GPT] API error response:", res.status, errText.slice(0, 200));
+      }
+    } catch (err) {
+      console.error("[GPT API error]", err);
+    }
   }
 
   return "좋은 질문이에요! 조금 더 자세히 말씀해주시면 더 잘 도와드릴 수 있어요.";
 }
 
-function generateChatSummary(messages: { sender: string; text: string }[]): string {
-  const participants = [...new Set(messages.filter(m => m.sender !== "me").map(m => m.sender))];
-  const topics: string[] = [];
-  const allText = messages.map(m => m.text).join(" ");
-
-  // 박채원: 쇼핑/립밤 대화 (루이비통, 샤넬, 디올, 에르메스)
-  if ((allText.includes("루이비통") || allText.includes("샤넬") || allText.includes("디올") || allText.includes("에르메스")) && (allText.includes("립") || allText.includes("가방"))) {
-    if (allText.includes("루이비통")) topics.push("루이비통 신상 가방 화제 → 가격 부담");
-    if (allText.includes("샤넬")) topics.push("샤넬 립스틱 선물 받기로 함");
-    if (allText.includes("디올")) topics.push("디올 립글로우 vs 샤넬 발색 비교");
-    if (allText.includes("에르메스")) topics.push("에르메스 립밤 추천 → 요즘 인기템");
-  }
-  // 서은재: 성수동 뚜흐느솔로 카페 약속 + 위치 확인
-  else if ((allText.includes("뚜흐느솔로") || (allText.includes("성수") && allText.includes("카페"))) && (allText.includes("어디쯤") || allText.includes("출발") || allText.includes("도착"))) {
-    topics.push("성수동 카페 뚜흐느솔로 3시 약속");
-    topics.push("서로 위치 확인 중 (출발/도착 연락)");
-  }
-  // 이해수: 판교 약속, 픽업, 쿠폰
-  else if (allText.includes("판교") && (allText.includes("픽업") || allText.includes("쿠폰") || allText.includes("데리러"))) {
-    topics.push("오늘 저녁 7시 판교 약속");
-    if (allText.includes("쿠폰")) topics.push("할인 쿠폰 챙겨오기");
-    if (allText.includes("픽업") || allText.includes("데리러")) topics.push("사무실 앞 픽업으로 변경");
-  }
-  // 카카오 신입동기 모임방: 성수 vs 을지로 장소 투표
-  else if ((allText.includes("성수") && allText.includes("을지로")) || (allText.includes("동기 모임") && allText.includes("장소"))) {
-    topics.push("토요일 동기 모임 장소 논의 중");
-    topics.push("성수 vs 을지로 vs 한남동 의견 분분");
-    if (allText.includes("예산") || allText.includes("3만원")) topics.push("예산 인당 3만원 조건");
-  }
-  // 김민수, 강지훈: 회식 장소
-  else if (allText.includes("회식") && allText.includes("장소")) {
-    topics.push("다음 주 회식 장소 정하기");
-    if (allText.includes("판교")) topics.push("판교 쪽 제안");
-  }
-  // 마케팅 1팀: 캠페인 관련
-  else if (allText.includes("캠페인") || allText.includes("마케팅") || allText.includes("소재")) {
-    topics.push("3월 신규 캠페인 기획");
-    if (allText.includes("비즈보드")) topics.push("카카오 비즈보드 매체 전략");
-  }
-  // 기타: 메시지에서 핵심 문장 추출
-  else {
-    const meaningful = messages.filter(m => m.sender !== "me" && m.text.length > 8);
-    meaningful.slice(-5).forEach(m => topics.push(m.text));
-  }
-
-  const header = participants.length > 0 ? `${participants.join(", ")}님과의 대화 요약:` : "대화 요약:";
-  const body = topics.length > 0 ? topics.map((t, i) => `${i + 1}. ${t}`).join("\n") : "특별한 내용 없음";
-  return `${header}\n${body}`;
-}
-
-function generateNextReply(messages: { sender: string; text: string }[]): string {
-  const allText = messages.map(m => m.text).join(" ");
-  const lastOther = [...messages].reverse().find(m => m.sender !== "me");
-  const lastText = lastOther?.text ?? "";
-
-  // 서은재: 카페 뚜흐느솔로 약속, 위치 확인 → "5분이면 도착" 직후
-  if ((allText.includes("뚜흐느솔로") || allText.includes("어디쯤")) && (allText.includes("도착") || allText.includes("5분"))) {
-    return "서은재님이 곧 도착한다고 했네요! 이렇게 답하면 자연스러워요.\n\n💬 \"오 좋아! 나 먼저 들어가서 자리 잡을게~\"\n\n또는\n\n💬 \"알았어! 기다릴게~\"";
-  }
-  // 박채원: 에르메스 립밤 추천 질문 직후
-  if (allText.includes("에르메스") && allText.includes("립밤") && lastText.includes("어때")) {
-    return "박채원님이 에르메스 립밤에 대해 물어봤어요. 맥락에 맞는 답변을 추천할게요!\n\n💬 \"오 궁금했어! 색이 어떤지 한번 봐줘~\"\n\n또는\n\n💬 \"나도 써봤는데 촉촉해서 좋더라! 로즈 컬러가 혈색 살려줘서 데일리로 쓰기 좋아\"";
-  }
-  // 박채원: 샤넬/디올 비교 대화
-  if ((allText.includes("샤넬") || allText.includes("디올")) && allText.includes("발색")) {
-    return "립 제품 비교 대화네요. 이렇게 이어가보세요!\n\n💬 \"오 고마워! 그럼 나는 디올로 해볼게 촉촉한 게 좋아서\"\n\n또는\n\n💬 \"발색 진한 거 좋아하면 샤넬이 더 나을 듯~\"";
-  }
-  // 이해수: 판교 약속, 픽업
-  if (allText.includes("판교") && (lastText.includes("조심") || lastText.includes("와"))) {
-    return "이해수님이 조심히 오라고 했네요. 이렇게 답하면 좋아요!\n\n💬 \"오케이~ 곧 갈게!\"\n\n또는\n\n💬 \"응 바로 출발~ 쿠폰 챙겼어!\"";
-  }
-  // 카카오 신입동기 모임방: 성수 vs 을지로 장소 투표
-  if ((allText.includes("성수") && allText.includes("을지로")) && (allText.includes("예산") || allText.includes("3만원"))) {
-    return "동기 모임 장소를 성수 vs 을지로로 좁혀놓은 상황이에요. 예산 3만원 조건에 맞는 절충안을 제안해보세요!\n\n💬 \"을지로 노가리 골목 쪽은 인당 2만원대로 분위기도 좋고, 2차로 성수 카페 가는 건 어때? 두 군데 다 가면 다 만족하지 않을까ㅎㅎ\"";
-  }
-  // 김민수, 강지훈: 회식 장소
-  if (allText.includes("회식") && allText.includes("장소")) {
-    return "회식 장소를 정하는 대화네요. 이렇게 제안해보세요!\n\n💬 \"판교역 근처 맛집 리스트 찾아볼게요\"\n\n또는\n\n💬 \"다음 주 화요일 저녁 어때요? 그때 다들 가능할까요?\"";
-  }
-  // 마케팅 1팀: 캠페인 관련 대화
-  if (allText.includes("캠페인") || allText.includes("소재") || allText.includes("마케팅")) {
-    return "3월 캠페인을 기획하는 대화네요. 이렇게 참여해보세요!\n\n💬 \"소재 시안 확인했어요! A안이 타겟 메시지에 더 맞는 것 같아요\"\n\n또는\n\n💬 \"매체별 예산 배분표 정리해서 공유드릴게요\"";
-  }
-  // 정산/돈 관련
-  if (allText.includes("정산") || allText.includes("송금")) {
-    return "정산 관련 대화네요. 이렇게 말해보는 건 어때요?\n\n💬 \"다들 확인했으면 토스로 보내줘~ 계좌는 카카오뱅크 ****야!\"";
-  }
-  // 일반적인 "할까?" "어때?" 질문
-  if (lastText.includes("할까") || lastText.includes("어때") || lastText.includes("?")) {
-    return `${lastOther?.sender ?? "상대방"}님이 의견을 물어봤어요. 맥락에 맞게 답해보세요!\n\n💬 "나는 개인적으로 둘 다 좋은데, 다수결로 정하자! 투표 올려볼까?"\n\n또는\n\n💬 "오 좋은 생각이다! 나도 찬성~"`;
-  }
-  // 기본: 마지막 메시지에 리액션
-  return `${lastOther?.sender ?? "상대방"}님의 마지막 메시지에 맞는 답변을 추천할게요!\n\n💬 "오 좋아!"\n\n또는\n\n💬 "알았어! 고마워~"\n\n대화 흐름에 맞게 골라서 보내보세요.`;
-}
 
 // Web Speech API 타입
 interface SpeechRecognitionEvent extends Event {
@@ -260,20 +361,87 @@ interface AILayerPopupProps {
   chatRoomMessages?: { sender: string; text: string }[]; // 현재 채팅방 메시지 (대화 요약용)
   onSendReply?: (text: string) => void; // 추천 답장을 채팅방에 전송
   onSendToMyChat?: (text: string, voice?: { duration: number; sttText: string }) => void; // 나와의 채팅방에 메시지 전송
-  allChatRooms?: { name: string; unreadCount: number; lastMessage: string }[]; // 전체 채팅방 (읽음처리용)
+  allChatRooms?: { name: string; unreadCount: number; lastMessage: string; messages?: { sender: string; text: string }[] }[]; // 전체 채팅방
   onMarkAllRead?: () => void; // 전체 읽음처리
   showNotificationList?: boolean; // 알림 아이콘 클릭 시 알림 리스트 뷰 표시
   onNotificationListClose?: () => void; // 알림 리스트 닫을 때 호출
   onChipPlaceClick?: () => void; // "성수동 뚜흐느솔로" 칩 클릭 시 장소 레이어로 연결
+  onMinimizedChange?: (minimized: boolean) => void; // 플로팅 최소화 상태 변경 콜백
 }
 
-// 맥락별 추천 칩
+// 맥락별 추천 칩 (페르소나별 분기 포함)
+const GOLF_FRIEND_SUGGESTIONS = [
+  "오늘의 브리핑",
+  "오후 미팅 준비",
+  "결혼기념일 준비 상황",
+  "반클리프 주문해줘",
+  "라비에벨 CC 가는 길",
+];
+
+// OpenAI API로 김부장 시나리오에 맞는 추천 칩 생성 (대화방 내용 참조)
+async function generateGolfSuggestions(
+  allChatRooms?: { name: string; unreadCount: number; lastMessage: string; messages?: { sender: string; text: string }[] }[],
+): Promise<string[]> {
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) return GOLF_FRIEND_SUGGESTIONS;
+
+  // 대화방 요약 생성
+  let chatSummary = "";
+  if (allChatRooms && allChatRooms.length > 0) {
+    chatSummary = "\n\n[카카오톡 대화방 내용]\n" + allChatRooms.map(room => {
+      const msgs = room.messages?.slice(-6).map(m => `  ${m.sender === "me" ? "김부장" : m.sender}: ${m.text}`).join("\n") || "";
+      return `📌 ${room.name} (안읽은 메시지 ${room.unreadCount}건)\n${msgs}`;
+    }).join("\n\n");
+  }
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `너는 카카오톡 AI 어시스턴트 '카나나'야. 사용자 '김부장'의 대화방 내용을 분석해서, 지금 당장 필요하거나 도움이 될 추천 질문 5개를 만들어줘.
+
+대화 내용에서 파악한 맥락을 기반으로 실질적으로 유용한 제안을 해야 해. 예를 들어:
+- 안읽은 메시지가 많은 대화방 → 요약이나 답장 제안
+- 약속이 언급됐으면 → 장소/시간/준비물 관련 제안
+- 누군가 질문을 했으면 → 답장 도움 제안
+- 할 일이 언급됐으면 → 리마인더/체크리스트 제안
+${chatSummary}
+
+규칙:
+- 대화 내용에 근거한 구체적인 제안 (일반적인 질문 X)
+- 반말/존댓말 자연스럽게 (예: "~해줘", "~알려줘", "~어때?")
+- 각 18자 이내로 짧게
+- AI가 먼저 센스있게 제안하는 느낌
+- JSON string 배열로만 응답 (다른 텍스트 없이)`,
+          },
+          { role: "user", content: "지금 김부장에게 필요한 추천 질문 5개" },
+        ],
+        max_tokens: 250,
+        temperature: 0.8,
+      }),
+    });
+    if (!res.ok) return GOLF_FRIEND_SUGGESTIONS;
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) return GOLF_FRIEND_SUGGESTIONS;
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed) && parsed.length >= 3) return parsed.slice(0, 5);
+    return GOLF_FRIEND_SUGGESTIONS;
+  } catch {
+    return GOLF_FRIEND_SUGGESTIONS;
+  }
+}
+
 const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
   friend: [
     "다크모드 켜줘",
-    "사원증",
+    "오후 미팅 준비",
     "생일 친구 선물 추천",
-    "이해수에게 메시지 보내",
     "판교역 가는 길",
   ],
   "chat-list": [
@@ -295,7 +463,9 @@ const SUGGESTIONS_BY_CONTEXT: Record<SuggestContext, string[]> = {
   ],
 };
 
-function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string, chatProductSuggestions?: string[]): string[] {
+function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string, chatProductSuggestions?: string[], personaId?: PersonaId, aiGenerated?: string[] | null): string[] {
+  // 김부장 페르소나: AI 생성 칩 우선, 없으면 기본 칩
+  if (personaId === "golf" && ctx === "friend") return aiGenerated ?? GOLF_FRIEND_SUGGESTIONS;
   const base = SUGGESTIONS_BY_CONTEXT[ctx];
   // chatProductSuggestions 우선 적용 (채팅방 맥락별 맞춤 칩) — 두 버튼을 칩 제일 앞으로
   if (chatProductSuggestions && chatProductSuggestions.length > 0 && (ctx === "chat-room" || ctx === "chat-room-new")) {
@@ -311,6 +481,33 @@ function getSuggestionsForContext(ctx: SuggestContext, chatPartnerName?: string,
   return base;
 }
 
+// ── 자동완성 후보 (입력 텍스트 기반 알약 추천) ──
+const AUTOCOMPLETE_CANDIDATES = [
+  "오늘의 브리핑",
+  "오후 미팅 준비",
+  "결혼기념일 준비 상황",
+  "반클리프 주문해줘",
+  "라비에벨 CC 가는 길",
+  "챙겨갈 게 뭐야",
+  "분좋카가 뭐야",
+  "읽음처리 해줘",
+  "다크모드 켜줘",
+  "해수에게 메시지 보내줘",
+  "딸지민에게 메시지 보내줘",
+  "채팅방 만들어줘",
+  "대화 요약해줘",
+  "오늘 날씨 어때",
+  "근처 맛집 추천해줘",
+];
+
+function getAutocompleteSuggestions(input: string): string[] {
+  if (!input || input.length < 1) return [];
+  const lower = input.toLowerCase();
+  return AUTOCOMPLETE_CANDIDATES
+    .filter(c => c.toLowerCase().includes(lower) && c.toLowerCase() !== lower)
+    .slice(0, 6);
+}
+
 // 음성 명령어 → 액션 매핑
 const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
   { keywords: ["다크모드", "다크 모드", "어두운 모드"], action: "darkmode" },
@@ -319,10 +516,10 @@ const VOICE_COMMANDS: { keywords: string[]; action: string }[] = [
   { keywords: ["전화 걸어", "전화해", "통화"], action: "call" },
   { keywords: ["프로필", "프로필 보여"], action: "profile" },
   { keywords: ["검색", "찾아"], action: "search" },
-  { keywords: ["선물", "선물하기", "선물 보내", "선물 추천", "생일 선물"], action: "gift" },
+  { keywords: ["선물", "선물하기", "선물 보내", "선물 추천", "생일 선물", "주문해", "주문 해", "주문하기"], action: "gift" },
   { keywords: ["가는 길", "어떻게 가", "길 찾기", "지도", "네비", "경로"], action: "navigation" },
   { keywords: ["전송", "보내", "보내줘"], action: "send" },
-  { keywords: ["사원증"], action: "choonsik-card" },
+  { keywords: ["강아지 놀이터"], action: "choonsik-card" },
   { keywords: ["채팅방 만들어", "채팅방 생성", "채팅방 만들기", "톡방 만들어", "단톡방 만들어", "대화방 만들어", "대화방 생성", "대화방 만들기"], action: "create-chatroom" },
   { keywords: ["읽음처리", "읽음 처리"], action: "mark-read" },
   { keywords: ["뭐라고", "뭐라 할", "뭐라 말", "다음에 뭐"], action: "next-reply" },
@@ -333,7 +530,22 @@ const KNOWN_FRIEND_NAMES = [
   "다니엘", "김민수", "마르코", "민수", "시나", "이현우", "유나", "태형",
   "김영지", "이해수", "강지훈", "고성현", "박채원", "이도현", "서은재",
   "혜선", "유진", "나연", "해수", "채원", "은재", "지훈", "영지", "현우", "도현", "성현",
+  "딸지민", "지민", "준서",
 ];
+
+// STT 음성 인식 오류 보정: 발음 유사어 → 정규 이름 매핑
+const VOICE_NAME_ALIASES: Record<string, string> = {
+  "와이프": "와이프 해수",
+  "와이퍼": "와이프 해수",
+  "해수": "와이프 해수",
+  "혜수": "와이프 해수",
+  "횟수": "와이프 해수",
+  "회수": "와이프 해수",
+  "헤수": "와이프 해수",
+  "해쑤": "와이프 해수",
+  "지민": "딸지민",
+  "딸 지민": "딸지민",
+};
 
 // ── 자연어 '채팅방 만들기' 의도 감지 ──
 // "민수랑 톡하고 싶어", "채원이한테 연락해줘", "해수랑 대화하자" 등
@@ -355,8 +567,10 @@ function detectChatIntentFromNL(text: string): { members: string[]; message: str
         .split(/[,，]\s*|\s+(?:이랑|랑|하고|과|와)\s+|\s+/)
         .map(n => n.replace(/이$/, "").trim())
         .filter(n => n.length > 0);
-      // 알려진 친구 이름이 하나라도 있으면 의도 확정
-      const matched = names.filter(n => KNOWN_FRIEND_NAMES.some(fn => fn.includes(n) || n.includes(fn)));
+      // 음성 별칭 보정 후 알려진 친구 이름 매칭
+      const matched = names
+        .map(n => VOICE_NAME_ALIASES[n] ?? n)
+        .filter(n => KNOWN_FRIEND_NAMES.some(fn => fn.includes(n) || n.includes(fn)) || Object.values(VOICE_NAME_ALIASES).includes(n));
       if (matched.length > 0) {
         return { members: matched, message: "" };
       }
@@ -394,22 +608,22 @@ const NAV_STEPS: NavStep[] = [
 const TOTAL_NAV_DISTANCE = 2000;
 
 const WISHLIST_ITEMS = [
-  { name: "르 라보 상탈 33", price: "357,000원", emoji: "🧴", color: "#F3E8FF" },
-  { name: "이솝 핸드크림 세트", price: "89,000원", emoji: "🧴", color: "#ECFDF5" },
-  { name: "애플 에어팟 맥스", price: "769,000원", emoji: "🎧", color: "#EFF6FF" },
-  { name: "디올 립 글로우", price: "48,000원", emoji: "💄", color: "#FFF1F2" },
+  { name: "반클리프 플럼 블로썸", price: "4,660,000원", emoji: "💎", color: "#FFF1F2" },
+  { name: "샤넬 클래식 플랩백", price: "12,800,000원", emoji: "👜", color: "#F3E8FF" },
+  { name: "까르띠에 탱크 워치", price: "8,950,000원", emoji: "⌚", color: "#EFF6FF" },
+  { name: "디올 프레스티지 세럼", price: "520,000원", emoji: "🧴", color: "#ECFDF5" },
 ];
 
 const GIFT_PRODUCT = {
-  name: "루즈 에르메스 립 케어 밤",
-  option: "립 케어 밤 선물포장",
-  reviewCount: 100,
-  satisfactionPct: 94,
-  originalPrice: 98000,
-  salePrice: 97000,
-  image: "/hermes.png",
+  name: "반클리프 아펠 브레이슬릿 '플럼 블로썸'",
+  option: "로즈골드 / 선물포장",
+  reviewCount: 87,
+  satisfactionPct: 98,
+  originalPrice: 4960000,
+  salePrice: 4660000,
+  image: "/vancleef.png",
   payMethod: "카카오페이 연결카드",
-  discount: "현대카드 1천원 즉시 할인",
+  discount: "현대카드 5만원 즉시 할인",
 };
 
 function extractGiftRecipient(text: string): string {
@@ -423,12 +637,13 @@ function extractGiftRecipient(text: string): string {
 
 const CHAT_BOLD_PARTS = [
   "대화 요약, 선물 추천, 길 찾기, 다크 모드 전환",
-  "판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함",
+  "판교 스시이도 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함",
 ];
 
 function renderChatWithBold(display: string): React.ReactNode {
   const result: React.ReactNode[] = [];
   let text = display;
+  let keyIdx = 0;
   while (true) {
     let first = { index: -1, length: 0, text: "" };
     for (const part of CHAT_BOLD_PARTS) {
@@ -438,11 +653,13 @@ function renderChatWithBold(display: string): React.ReactNode {
       }
     }
     if (first.index === -1) {
-      result.push(text);
+      if (text) result.push(<span key={`t${keyIdx}`} data-ctext="true">{text}</span>);
       break;
     }
-    result.push(text.slice(0, first.index));
-    result.push(<span key={`${first.index}-${result.length}`} className="font-semibold">{first.text}</span>);
+    if (first.index > 0) {
+      result.push(<span key={`t${keyIdx++}`} data-ctext="true">{text.slice(0, first.index)}</span>);
+    }
+    result.push(<span key={`b${keyIdx++}`} data-ctext="true" className="font-semibold">{first.text}</span>);
     text = text.slice(first.index + first.length);
   }
   return <>{result}</>;
@@ -540,13 +757,17 @@ function extractChatRequest(text: string): { members: string[]; message: string 
   return { members: names, message };
 }
 
-export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: showNotiProp = false, onNotificationListClose: onNotiClose, onChipPlaceClick }: AILayerPopupProps) {
+export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeToggle, onCreateChatRoom, suggestContext = "friend", chatPartnerName, chatProductSuggestions, chatRoomMessages, onSendReply, onSendToMyChat, allChatRooms, onMarkAllRead, showNotificationList: showNotiProp = false, onNotificationListClose: onNotiClose, onChipPlaceClick, onMinimizedChange }: AILayerPopupProps) {
   const [textMode, setTextMode] = useState(false);
+  const [voiceStandby, setVoiceStandby] = useState(true); // 음성 대기 모드: 탭해야 마이크 시작
   const [transcript, setTranscript] = useState("");
   const [interimText, setInterimText] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [inputText, _setInputText] = useState("");
+  // AI 생성 추천 칩
+  const [aiSuggestions, setAiSuggestions] = useState<string[] | null>(null);
+
   const [textSending, setTextSending] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null); // 사원증 등 액션별 로딩 텍스트
   const [sendStatus, setSendStatus] = useState<string | null>(null);
@@ -554,9 +775,21 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [giftResult, setGiftResult] = useState<string | null>(null);
   const [replyMode, _setReplyMode] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  useEffect(() => { onMinimizedChange?.(minimized); }, [minimized, onMinimizedChange]);
   const [showDismiss, setShowDismiss] = useState(false);
   const [floatPos, setFloatPos] = useState<{ x: number; y: number } | null>(null);
   const [dismissing, setDismissing] = useState(false);
+  const persona = usePersona();
+  const [naviMinutes, setNaviMinutes] = useState(120);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNaviMinutes(m => {
+        const delta = Math.floor(Math.random() * 11) - 5; // -5 ~ +5
+        return Math.max(110, Math.min(135, m + delta));
+      });
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
   const [meetingMode, setMeetingMode] = useState(false);
   const [meetingRecording, setMeetingRecording] = useState(false);
   const [meetingPaused, setMeetingPaused] = useState(false);
@@ -564,6 +797,94 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [meetingSending, setMeetingSending] = useState(false);
   const [meetingElapsed, setMeetingElapsed] = useState(0);
   const meetingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Circle to Search — 말풍선 롱프레스 시 활성화
+  const [circleActiveId, setCircleActiveId] = useState<string | null>(null);
+  const circleBubbleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // TTS (OpenAI TTS — AI 답변 읽어주기)
+  const [ttsSpeaking, setTtsSpeaking] = useState(false);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceSentRef = useRef(false); // 음성으로 보낸 메시지인지 추적
+  const pendingVoiceMsgsRef = useRef<ChatMessage[] | null>(null); // 음성 TTS 중 대기 메시지
+  async function toggleTts(directText?: string) {
+    if (ttsSpeaking) {
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.currentTime = 0;
+        ttsAudioRef.current = null;
+      }
+      setTtsSpeaking(false);
+      setStatusMessage(null);
+      if (pendingVoiceMsgsRef.current) {
+        setChatMessages(pendingVoiceMsgsRef.current);
+        pendingVoiceMsgsRef.current = null;
+      }
+      return;
+    }
+    // directText가 있으면 바로 사용, 없으면 chatMessages에서 찾기
+    const ttsText = directText ?? [...chatMessages].reverse().find(m => m.role === "ai")?.text;
+    if (!ttsText) return;
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (!apiKey) {
+      // fallback: 브라우저 TTS
+      const utt = new SpeechSynthesisUtterance(ttsText);
+      utt.lang = "ko-KR";
+      utt.rate = 1.05;
+      utt.onend = () => {
+        setTtsSpeaking(false);
+        setStatusMessage(null);
+        setVoiceStandby(true);
+      };
+      setTtsSpeaking(true);
+      window.speechSynthesis.speak(utt);
+      return;
+    }
+    setTtsSpeaking(true);
+    try {
+      const res = await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "tts-1",
+          input: ttsText.slice(0, 4096),
+          voice: "nova",
+          response_format: "mp3",
+          speed: 1.05,
+        }),
+      });
+      if (!res.ok) throw new Error("TTS API error");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.onended = () => {
+        setTtsSpeaking(false);
+        setStatusMessage(null);
+        URL.revokeObjectURL(url);
+        ttsAudioRef.current = null;
+        setVoiceStandby(true);
+      };
+      audio.onerror = () => {
+        setTtsSpeaking(false);
+        setStatusMessage(null);
+        URL.revokeObjectURL(url);
+        ttsAudioRef.current = null;
+        setVoiceStandby(true);
+      };
+      audio.play();
+    } catch {
+      setTtsSpeaking(false);
+      setStatusMessage(null);
+      setVoiceStandby(true);
+      if (pendingVoiceMsgsRef.current) {
+        setChatMessages(pendingVoiceMsgsRef.current);
+        pendingVoiceMsgsRef.current = null;
+      }
+    }
+  }
+
   const [directionMode, setDirectionMode] = useState(false);
   const [directionDest, setDirectionDest] = useState("");
   const [navActive, setNavActive] = useState(false);
@@ -575,7 +896,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [wishlistView, setWishlistView] = useState(false);
   const [notificationListView, setNotificationListView] = useState(false);
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [journalTab, setJournalTab] = useState<"briefing" | "journal">("briefing");
+  const [aiKbVisible, setAiKbVisible] = useState(false);
+  const keyboardOffset = aiKbVisible ? 290 : 0;
   const [wishlistPhase, setWishlistPhase] = useState<"product" | "loading" | "complete">("product");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiTyping, setAiTyping] = useState(false);
@@ -586,9 +909,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
   const [popupLockedHeight, setPopupLockedHeight] = useState<number | null>(null);
   const [nearDismiss, setNearDismiss] = useState(false);
   const nearDismissRef = useRef(false);
+  const chatRequestIdRef = useRef(0); // stale API 응답 무시용
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragOffsetRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const replyModeRef = useRef(false);
+  const messageTargetRef = useRef<string | null>(null); // 음성 메시지 전송 대상
   const inputTextRef = useRef("");
   const textSendLockRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -606,34 +931,30 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     _setInputText(val);
   }
 
-  // ── 키보드 감지: VisualViewport API로 키보드 높이 추적 ──
+  // 팝업 닫힐 때 전체 상태 초기화
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
+    if (!isOpen) {
+      chatRequestIdRef.current++; // stale API 응답 무시
+      setAiKbVisible(false);
+      setTextMode(false);
+      setChatMessages([]);
+      setTypingMessageId(null);
+      setTypingDisplayedLength(0);
+      setAiTyping(false);
+      setPopupLockedHeight(null);
+      setCircleActiveId(null);
+      setVoiceStandby(true);
+      updateInputText("");
+    }
+  }, [isOpen]);
 
-    let rafId = 0;
-    const handleViewport = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        // visualViewport.height 줄어든 만큼 = 키보드 높이
-        // offsetTop: iOS Safari에서 키보드로 인해 뷰포트가 스크롤된 양 보정
-        const kbHeight = window.innerHeight - vv.height - vv.offsetTop;
-        setKeyboardOffset(kbHeight > 50 ? kbHeight : 0);
-
-        // 키보드 올라올 때 body 스크롤 방지
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-      });
-    };
-
-    vv.addEventListener("resize", handleViewport);
-    vv.addEventListener("scroll", handleViewport);
-    return () => {
-      cancelAnimationFrame(rafId);
-      vv.removeEventListener("resize", handleViewport);
-      vv.removeEventListener("scroll", handleViewport);
-    };
-  }, []);
+  // 김부장 페르소나: 팝업 열릴 때 AI 추천 칩 생성
+  useEffect(() => {
+    if (isOpen && persona.id === "golf" && suggestContext === "friend") {
+      generateGolfSuggestions(allChatRooms).then(setAiSuggestions);
+    }
+    if (!isOpen) setAiSuggestions(null);
+  }, [isOpen, persona.id, suggestContext]);
 
   // 채팅 메시지 추가 시 자동 스크롤 — 넘칠 때만 스크롤
   const scrollToBottom = useCallback(() => {
@@ -647,37 +968,108 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     });
   }, []);
 
+  // 텍스트 모드 전환 시 음성 pending 메시지 커밋
+  useEffect(() => {
+    if (textMode && pendingVoiceMsgsRef.current) {
+      setChatMessages(pendingVoiceMsgsRef.current);
+      pendingVoiceMsgsRef.current = null;
+    }
+  }, [textMode]);
+
   // 채팅 메시지 전송 + AI 응답 시뮬레이션 (질문마다 이전 대화 리셋)
   const sendChatMessage = useCallback(async (text: string) => {
-    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
-    // 0) 텍스트 모드 활성화 (서제스트 칩 → 대화형 전환 보장)
-    setTextMode(true);
-    // 1) 유저 메시지 표시 + 스켈레톤 동시 세팅
-    setChatMessages([userMsg]);
-    setTypingMessageId(null);
-    setAiTyping(true);
-
-    // 2) DOM 렌더 완료 후 스크롤 (2프레임 대기 — 트랜지션 시작 후)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => scrollToBottom());
-    });
-
-    try {
-      const [aiText] = await Promise.all([
-        getAIResponse(text, [userMsg], chatRoomMessages, allChatRooms),
-        new Promise<void>((r) => setTimeout(r, 1200)),
-      ]);
-      // 3) 스켈레톤 → 타이핑 전환: 먼저 AI 메시지 추가
-      const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
-      setChatMessages((prev) => [...prev, aiMsg]);
-      setTypingDisplayedLength(0);
-      setTypingMessageId(aiMsg.id);
-      // 4) 스켈레톤 약간 뒤에 제거 (타이핑 첫 글자가 보인 후 fade out)
-      setTimeout(() => setAiTyping(false), 80);
-    } catch {
-      setAiTyping(false);
+    // ── 텍스트 입력에서도 기능 실행 커맨드 감지 (UI 액션만 가로챔) ──
+    const textAction = matchCommand(text);
+    if (textAction === "create-chatroom") {
+      const { members, message } = extractChatRequest(text);
+      if (members.length > 0 && onCreateChatRoom) {
+        onCreateChatRoom(members, message || undefined);
+        onClose();
+        return;
+      }
+      // 멤버 미지정 → "누구랑?" 안내를 AI 응답으로 표시
+    } else if (textAction === "gift") {
+      const recipient = extractGiftRecipient(text);
+      // 로딩 phase → 결제 페이지 전환
+      setGiftResult(recipient);
+      setWishlistView(true);
+      setWishlistPhase("loading");
+      setTextMode(false);
+      setTimeout(() => {
+        setWishlistPhase("product");
+      }, 1800);
+      return;
+    } else if (textAction === "darkmode") {
+      const darkIntent = parseDarkModeIntent(text);
+      if (darkIntent !== null) {
+        onDarkModeToggle(darkIntent);
+        return;
+      }
+    } else if (textAction === "mark-read") {
+      onMarkAllRead?.();
+      // 읽음처리는 AI 응답도 함께 표시 (기존 프리셋)
     }
-  }, [scrollToBottom, chatRoomMessages, allChatRooms]);
+    // ── 위에서 return되지 않은 모든 텍스트는 API로 전달 ──
+
+    const isVoice = voiceSentRef.current;
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text, timestamp: Date.now() };
+
+    if (isVoice) {
+      // ── 음성 모드: 화면 전환 없이 센터 그래픽 유지, AI 응답 후 TTS ──
+      setIsLoading(true);
+      try {
+        const aiText = await getAIResponse(text, [userMsg], chatRoomMessages, allChatRooms, persona.id);
+        // AI 응답은 TTS 끝난 뒤 텍스트 모드 전환 시 볼 수 있도록 ref에 보관
+        const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
+        pendingVoiceMsgsRef.current = [userMsg, aiMsg];
+        setIsLoading(false);
+        setStatusMessage("브리핑을 읽어드리고 있어요");
+        voiceSentRef.current = false;
+        // 바로 TTS 재생 — aiText를 직접 전달
+        toggleTts(aiText);
+      } catch {
+        setIsLoading(false);
+        setStatusMessage(null);
+        voiceSentRef.current = false;
+      }
+    } else {
+      // ── 텍스트 모드: 기존 채팅 UI ──
+      // 0) 텍스트 모드 활성화 (서제스트 칩 → 대화형 전환 보장)
+      setTextMode(true);
+      // 1) 유저 메시지 표시 + 스켈레톤 동시 세팅
+      const reqId = ++chatRequestIdRef.current;
+      setChatMessages([userMsg]);
+      setTypingMessageId(null);
+      setAiTyping(true);
+
+      // 2) DOM 렌더 완료 후 스크롤 (2프레임 대기 — 트랜지션 시작 후)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => scrollToBottom());
+      });
+
+      try {
+        console.log("[Chat] calling getAIResponse:", text.slice(0, 50));
+        const [aiText] = await Promise.all([
+          getAIResponse(text, [userMsg], chatRoomMessages, allChatRooms, persona.id),
+          new Promise<void>((r) => setTimeout(r, 2500)),
+        ]);
+        // stale 응답 무시 (X로 닫은 뒤 돌아온 응답)
+        if (reqId !== chatRequestIdRef.current) return;
+        console.log("[Chat] AI response:", aiText?.slice(0, 80));
+        // 3) 스켈레톤 → AI 메시지 추가
+        const aiMsg: ChatMessage = { id: `a-${Date.now()}`, role: "ai", text: aiText, timestamp: Date.now() };
+        setChatMessages((prev) => [...prev, aiMsg]);
+        // 텍스트 입력: 기존 타이핑 애니메이션
+        setTypingDisplayedLength(0);
+        setTypingMessageId(aiMsg.id);
+        setTimeout(() => setAiTyping(false), 80);
+      } catch (err) {
+        if (reqId !== chatRequestIdRef.current) return;
+        console.error("[sendChatMessage error]", err);
+        setAiTyping(false);
+      }
+    }
+  }, [scrollToBottom, chatRoomMessages, allChatRooms, onCreateChatRoom, onClose, onDarkModeToggle, onMarkAllRead]);
 
   // AI 응답 타이핑 효과 (서로게이트 페어/이모지 안전)
   useEffect(() => {
@@ -862,8 +1254,21 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     const text = (inputTextRef.current || inputText).trim();
     if (!text) return;
     textSendLockRef.current = true;
-    // replyMode일 때는 명령어 매칭 없이 바로 전송 플로우
+    // replyMode: messageTarget이 있으면 해당 대상에게 전송 후 팝업 닫기
     if (replyMode) {
+      if (messageTargetRef.current) {
+        const target = messageTargetRef.current;
+        if (onCreateChatRoom) {
+          onCreateChatRoom([target], text);
+        }
+        messageTargetRef.current = null;
+        updateReplyMode(false);
+        updateInputText("");
+        voiceSentRef.current = false;
+        textSendLockRef.current = false;
+        onClose();
+        return;
+      }
       doSendMessage();
       setTimeout(() => { textSendLockRef.current = false; }, 1500);
       return;
@@ -873,18 +1278,18 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
     // ── Direct Action Type: 즉시 시스템 동작 ──
     if (action === "gift") {
-      setTextSending(true);
       inputRef.current?.blur();
+      doStop();
+      setTranscript("");
+      setInterimText("");
+      const recipient = extractGiftRecipient(text);
+      setGiftResult(recipient);
+      setWishlistView(true);
+      setWishlistPhase("loading");
+      setTextMode(false);
+      setChoonsikCardView(false);
       loadingTimerRef.current = setTimeout(() => {
-        setTextSending(false);
-        const recipient = extractGiftRecipient(text);
-        setGiftResult(recipient);
-        setWishlistView(true);
-        setTextMode(false);
-        setChoonsikCardView(false);
-        doStop();
-        setTranscript("");
-        setInterimText("");
+        setWishlistPhase("product");
         setStatusMessage(null);
         textSendLockRef.current = false;
       }, 1500);
@@ -918,7 +1323,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       }, 1500);
     } else if (action === "choonsik-card") {
       inputRef.current?.blur();
-      setLoadingMessage("사원증을 불러오는 중");
+      setLoadingMessage("강아지 놀이터를 찾는 중");
       setTextSending(true);
       loadingTimerRef.current = setTimeout(() => {
         setLoadingMessage(null);
@@ -948,7 +1353,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         sendChatMessage(text).finally(() => { textSendLockRef.current = false; });
       }
     } else if (action === "message") {
-      fillMessageDraft(text);
+      handleVoiceMessage(text);
       textSendLockRef.current = false;
 
     // ── Conversational Type: 사용자 말풍선 → 스켈레톤 → AI 타이핑 ──
@@ -963,47 +1368,113 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
   }
 
-  function fillMessageDraft(voiceText: string) {
-    // 패턴1: "~에게 ~라고 메시지 보내" (내용 포함)
-    const matchWithBody = voiceText.match(/(.+?)에게\s+(.+?)(?:라고|이라고|다고)\s*(?:메시지|문자)/);
-    // 패턴2: "~에게 메시지 보내줘" (내용 없이)
-    const matchNoBody = !matchWithBody ? voiceText.match(/(.+?)에게\s*(?:메시지|문자)\s*(?:보내|전송)/) : null;
-    const recipient = matchWithBody ? matchWithBody[1]?.trim() : matchNoBody ? matchNoBody[1]?.trim() : "";
+  // ── Voice-to-Action Message Handler ──
+  // 음성 입력에서 대상과 메시지 내용을 파악하여 자동 처리
+  function handleVoiceMessage(voiceText: string) {
+    // 1) NLP 파싱: 이름 + 메시지 내용 추출
+    // 인용 조사 제거 — "곧 간다고" → "곧 간다", "사랑해라고" → "사랑해"
+    // "이라고" > "라고" > "고" 순서로 매칭 (다고X — "다"는 어미이므로 보존)
+    const stripQuote = (s: string) => s.replace(/(?:이라고|라고|고)$/, "");
 
-    // 수신자 파싱 실패 → 일반 전송 플로우로 폴백
+    // 패턴1: "혜수에게 곧 간다고 메시지 보내줘" → 이름: 혜수, 내용: 곧 간다
+    const matchWithBody = voiceText.match(/(.+?)에게\s+(.+?)\s*(?:메시지|문자|톡)\s*(?:보내|전송)/);
+    // 패턴2: "혜수에게 메시지 보내줘" → 이름: 혜수, 내용: 없음
+    const matchNoBody = !matchWithBody ? voiceText.match(/(.+?)에게\s*(?:메시지|문자|톡)\s*(?:보내|전송)/) : null;
+    // 패턴3: "혜수한테 곧 간다고 보내줘"
+    const matchHante = !matchWithBody && !matchNoBody ? voiceText.match(/(.+?)(?:한테|께)\s+(.+?)\s*(?:보내|전송)/) : null;
+    // 패턴4: "혜수한테 보내줘"
+    const matchHanteNoBody = !matchWithBody && !matchNoBody && !matchHante ? voiceText.match(/(.+?)(?:한테|께)\s*(?:메시지|문자|톡)?\s*(?:보내|전송)/) : null;
+
+    const recipient = (matchWithBody?.[1] ?? matchNoBody?.[1] ?? matchHante?.[1] ?? matchHanteNoBody?.[1])?.trim() ?? "";
+    const rawBody = (matchWithBody?.[2] ?? matchHante?.[2])?.trim() ?? "";
+    const body = rawBody ? stripQuote(rawBody) : "";
+
+    // 수신자 파싱 실패 → 일반 대화형 플로우로 폴백
     if (!recipient) {
-      doSendMessage();
+      setTranscript("");
+      setInterimText("");
+      setStatusMessage(null);
+      sendChatMessage(voiceText);
       return;
     }
 
-    const body = matchWithBody ? matchWithBody[2] : "";
+    // 알려진 이름 매칭 (퍼지 매칭)
+    // 음성 인식 오류 보정 → 정규 이름 매핑
+    const aliasResolved = VOICE_NAME_ALIASES[recipient] ?? recipient;
+    const resolvedName = aliasResolved !== recipient
+      ? aliasResolved
+      : KNOWN_FRIEND_NAMES.find(fn => fn.includes(recipient) || recipient.includes(fn)) || recipient;
 
     if (body) {
-      // 내용 있으면 기존처럼 draft 채우고 reply 모드
-      updateInputText(`${recipient}에게 ${body}`);
-      setTextMode(false);
-      updateReplyMode(true);
-      setTranscript("");
-      setInterimText("");
-      setStatusMessage(null);
-      doStart();
-    } else {
-      // 내용 없으면 Conversational 플로우 → AI 안내 후 replyMode 진입
+      // 2a) 내용 있음 → 채팅방 열고 메시지 즉시 전송, 팝업 닫기
       doStop();
       setTranscript("");
       setInterimText("");
-      setStatusMessage(null);
-      sendChatMessage(voiceText).then(() => {
-        updateReplyMode(true);
-      });
+      setStatusMessage(`${resolvedName}님에게 전송 중...`);
+      setIsLoading(true);
+
+      setTimeout(() => {
+        setIsLoading(false);
+        setStatusMessage(null);
+        // 채팅방 열기 + 메시지 전송
+        if (onCreateChatRoom) {
+          onCreateChatRoom([resolvedName], body);
+        }
+        // 모든 상태 리셋 + 팝업 닫기
+        messageTargetRef.current = null;
+        updateReplyMode(false);
+        updateInputText("");
+        voiceSentRef.current = false;
+        onClose();
+      }, 800);
+    } else {
+      // 2b) 내용 없음 → TTS로 물어보고 입력 대기 모드 진입
+      doStop();
+      setTranscript("");
+      setInterimText("");
+      messageTargetRef.current = resolvedName;
+
+      // TTS로 안내 음성 재생
+      const guideText = `${resolvedName}님에게 보낼 메시지 내용을 말씀해 주세요.`;
+      setStatusMessage(guideText);
+
+      // TTS 재생 후 마이크 자동 시작 (toggleTts의 onended에서 doStart 호출됨)
+      toggleTts(guideText);
+
+      // replyMode 진입 — 다음 음성 입력이 메시지 본문으로 처리됨
+      updateReplyMode(true);
     }
   }
 
   function handleVoiceSend(text: string) {
     doStop();
     clearSilenceTimer();
-    // reply 모드: "전송" 명령이면 보내기, 아니면 입력창에 텍스트 채우기
+    voiceSentRef.current = true;
+    // reply 모드: 메시지 대상이 있으면 본문으로 즉시 전송
     if (replyModeRef.current) {
+      if (messageTargetRef.current) {
+        // Voice-to-Action: 대상이 지정된 상태에서 본문 입력됨 → 즉시 전송
+        const target = messageTargetRef.current;
+        doStop();
+        setTranscript("");
+        setInterimText("");
+        setStatusMessage(`${target}님에게 전송 중...`);
+        setIsLoading(true);
+
+        setTimeout(() => {
+          setIsLoading(false);
+          setStatusMessage(null);
+          if (onCreateChatRoom) {
+            onCreateChatRoom([target], text);
+          }
+          messageTargetRef.current = null;
+          updateReplyMode(false);
+          updateInputText("");
+          voiceSentRef.current = false;
+          onClose();
+        }, 800);
+        return;
+      }
       const sendAction = matchCommand(text);
       if (sendAction === "send" && inputTextRef.current.trim()) {
         doSendMessage();
@@ -1014,114 +1485,94 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setInterimText("");
       setStatusMessage(null);
       setIsLoading(false);
-      doStart();
+      setVoiceStandby(true);
       return;
     }
     const action = matchCommand(text);
 
-    // ── Direct Action Type: 즉시 시스템 동작 (텍스트 입력과 동일한 분기) ──
+    // ── Direct Action Type: 즉시 시스템 동작 (음성 응답 없이 기능 실행) ──
     if (action === "gift") {
-      setIsLoading(true);
-      setStatusMessage("처리 중...");
+      voiceSentRef.current = false;
+      setTranscript("");
+      setInterimText("");
+      doStop();
+      const recipient = extractGiftRecipient(text);
+      setGiftResult(recipient);
+      setWishlistView(true);
+      setWishlistPhase("loading");
+      setTextMode(false);
+      setChoonsikCardView(false);
       loadingTimerRef.current = setTimeout(() => {
-        setIsLoading(false);
-        setStatusMessage(null);
-        const recipient = extractGiftRecipient(text);
-        setGiftResult(recipient);
-        setWishlistView(true);
-        setTextMode(false);
-        setChoonsikCardView(false);
-        setTranscript("");
-        setInterimText("");
-      }, 1500);
+        setWishlistPhase("product");
+      }, 1800);
     } else if (action === "darkmode") {
       const darkIntent = parseDarkModeIntent(text);
-      setIsLoading(true);
-      setStatusMessage("처리 중...");
-      loadingTimerRef.current = setTimeout(() => {
-        setIsLoading(false);
-        setStatusMessage(null);
-        setChoonsikCardView(false);
-        setTextMode(false);
-        setDarkmodeView(true);
-        if (darkIntent !== null) {
-          setTimeout(() => onDarkModeToggle(darkIntent), 350);
-        }
-      }, 1500);
+      // 음성: 다크모드 즉시 실행 (중간 UI 없이)
+      setTranscript("");
+      setInterimText("");
+      if (darkIntent !== null) {
+        onDarkModeToggle(darkIntent);
+      } else {
+        // "다크모드" 만 말한 경우 토글
+        onDarkModeToggle(!darkMode);
+      }
+      voiceSentRef.current = false;
+      setVoiceStandby(true);
     } else if (action === "navigation") {
+      voiceSentRef.current = false;
+      setTranscript("");
+      setInterimText("");
+      doStop();
       const dest = extractDestination(text);
-      setIsLoading(true);
-      setStatusMessage("처리 중...");
-      loadingTimerRef.current = setTimeout(() => {
-        setIsLoading(false);
-        setStatusMessage(null);
-        setChoonsikCardView(false);
-        setTextMode(false);
-        setDirectionMode(true);
-        setDirectionDest(dest);
-      }, 1500);
+      setChoonsikCardView(false);
+      setTextMode(false);
+      setDirectionMode(true);
+      setDirectionDest(dest);
     } else if (action === "choonsik-card") {
-      setIsLoading(true);
-      setStatusMessage("사원증을 불러오는 중");
-      loadingTimerRef.current = setTimeout(() => {
-        setIsLoading(false);
-        setStatusMessage(null);
-        doStop();
-        inputRef.current?.blur();
-        setTranscript("");
-        setInterimText("");
-        setTextMode(false);
-        setSummaryResult(null);
-        setChoonsikCardView(true);
-      }, 1500);
+      voiceSentRef.current = false;
+      setTranscript("");
+      setInterimText("");
+      doStop();
+      setTextMode(false);
+      setSummaryResult(null);
+      setChoonsikCardView(true);
     } else if (action === "create-chatroom") {
       const { members, message } = extractChatRequest(text);
       if (members.length > 0 && onCreateChatRoom) {
-        setIsLoading(true);
-        setStatusMessage("처리 중...");
-        loadingTimerRef.current = setTimeout(() => {
-          setIsLoading(false);
-          setStatusMessage(null);
-          setTextMode(false);
-          doStop();
-          onCreateChatRoom(members, message || undefined);
-          onClose();
-        }, 1500);
+        // 멤버 지정됨 → 즉시 채팅방 생성 (음성 응답 없이)
+        voiceSentRef.current = false;
+        setTranscript("");
+        setInterimText("");
+        doStop();
+        onCreateChatRoom(members, message || undefined);
+        onClose();
       } else {
-        // 멤버 미지정 → AI 안내 (대화형)
+        // 멤버 미지정 → TTS 없이 안내 (텍스트 대화형)
+        voiceSentRef.current = false;
         setTranscript("");
         setInterimText("");
         setStatusMessage(null);
-        setTextMode(true);
         sendChatMessage(text);
       }
     } else if (action === "message") {
-      setIsLoading(true);
-      setStatusMessage("처리 중...");
-      loadingTimerRef.current = setTimeout(() => {
-        setIsLoading(false);
-        setStatusMessage(null);
-        fillMessageDraft(text);
-      }, 1500);
+      handleVoiceMessage(text);
     } else if (action === "send" && (replyModeRef.current || inputTextRef.current.trim())) {
       doSendMessage();
     } else if (action === "mark-read") {
-      // 읽음처리 → 대화형 플로우 + 실제 읽음처리 (텍스트와 동일)
+      // 읽음처리 → 즉시 기능 실행 (음성 응답 없이)
+      voiceSentRef.current = false;
       setTranscript("");
       setInterimText("");
       setStatusMessage(null);
-      setTextMode(true);
-      sendChatMessage(text).then(() => {
-        onMarkAllRead?.();
-      });
+      onMarkAllRead?.();
+      setVoiceStandby(true);
 
-    // ── Conversational Type: AI 대화 플로우 (텍스트와 동일) ──
+    // ── Conversational Type: AI 대화 플로우 ──
     } else {
       // chat-summary, next-reply, 일반 텍스트 → 대화형 플로우
       setTranscript("");
       setInterimText("");
       setStatusMessage(null);
-      setTextMode(true);
       sendChatMessage(text);
     }
   }
@@ -1196,7 +1647,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       doStop();
       clearSilenceTimer();
       clearLoadingTimer();
+      window.speechSynthesis.cancel();
+      if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
+      setTtsSpeaking(false);
       setTextMode(false);
+      setVoiceStandby(true);
       setTranscript("");
       setInterimText("");
       setStatusMessage(null);
@@ -1206,8 +1661,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setSummaryResult(null);
       setGiftResult(null);
       updateReplyMode(false);
+      messageTargetRef.current = null;
       setSendStatus(null);
       setChatMessages([]);
+      pendingVoiceMsgsRef.current = null;
       setAiTyping(false);
       setMinimized(false);
       setShowDismiss(false);
@@ -1233,27 +1690,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setNotificationListView(false);
       return;
     }
-    if (textMode || directionMode || darkmodeView || wishlistView || meetingMode) {
+    if (textMode || directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) {
       doStop();
       return;
     }
-    const timer = setTimeout(() => doStart(), 150);
+    // 음성 대기 모드: 팝업 열려도 마이크 바로 시작하지 않음
+    setVoiceStandby(true);
     return () => {
-      clearTimeout(timer);
       doStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, textMode, directionMode, darkmodeView, wishlistView, meetingMode]);
+  }, [isOpen, textMode, directionMode, darkmodeView, wishlistView, meetingMode, notificationListView]);
 
-  // 팝업 초기 높이 캡처 → 이후 모든 모드에서 동일 높이 유지
+  // 팝업 초기 높이 고정 320px
   useEffect(() => {
-    if (isOpen && !popupLockedHeight && popupBodyRef.current) {
-      const rAF = requestAnimationFrame(() => {
-        if (popupBodyRef.current) {
-          setPopupLockedHeight(popupBodyRef.current.offsetHeight);
-        }
-      });
-      return () => cancelAnimationFrame(rAF);
+    if (isOpen && !popupLockedHeight) {
+      setPopupLockedHeight(320);
     }
   }, [isOpen, popupLockedHeight]);
 
@@ -1263,6 +1715,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       setNotificationListView(true);
     }
   }, [showNotiProp, isOpen]);
+
+  // 페르소나별 프리셋 응답 (음성/텍스트 입력 시 getAIResponse 대신 사용)
+  // — 프리로드하지 않고, 사용자가 직접 질문하면 매칭되는 답변을 반환
 
   // 미니 플로팅 버튼 드래그 관련 상태
   const draggingRef = useRef(false);
@@ -1277,14 +1732,22 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     }
   }
 
+  function getScale() {
+    const el = containerRef.current;
+    if (!el) return 1;
+    const cr = el.getBoundingClientRect();
+    return cr.width / el.offsetWidth || 1;
+  }
+
   function startLongPress(clientX: number, clientY: number, el: HTMLElement) {
     const rect = el.getBoundingClientRect();
     const cr = containerRef.current?.getBoundingClientRect();
     if (!cr) return;
-    const elCenterX = rect.left + rect.width / 2 - cr.left;
-    const elCenterY = rect.top + rect.height / 2 - cr.top;
-    const mouseRelX = clientX - cr.left;
-    const mouseRelY = clientY - cr.top;
+    const s = getScale();
+    const elCenterX = (rect.left + rect.width / 2 - cr.left) / s;
+    const elCenterY = (rect.top + rect.height / 2 - cr.top) / s;
+    const mouseRelX = (clientX - cr.left) / s;
+    const mouseRelY = (clientY - cr.top) / s;
     dragOffsetRef.current = { dx: mouseRelX - elCenterX, dy: mouseRelY - elCenterY };
     draggingRef.current = true;
     wasDraggedRef.current = false;
@@ -1301,13 +1764,14 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
     setIsDragging(true);
     const cr = containerRef.current?.getBoundingClientRect();
     if (!cr) return;
-    const relX = clientX - cr.left - dragOffsetRef.current.dx;
-    const relY = clientY - cr.top - dragOffsetRef.current.dy;
+    const s = getScale();
+    const relX = (clientX - cr.left) / s - dragOffsetRef.current.dx;
+    const relY = (clientY - cr.top) / s - dragOffsetRef.current.dy;
     setFloatPos({ x: relX, y: relY });
     wasDraggedRef.current = true;
-    // X 버튼 근접 감지 (컨테이너 상대 좌표)
-    const xCenter = cr.width / 2;
-    const yTarget = cr.height - 104 - 20;
+    // X 버튼 근접 감지 (컨테이너 상대 좌표, 스케일 보정)
+    const xCenter = cr.width / s / 2;
+    const yTarget = cr.height / s - 104 - 20;
     const dist = Math.sqrt((relX - xCenter) ** 2 + (relY - yTarget) ** 2);
     const isNear = dist < 50;
     nearDismissRef.current = isNear;
@@ -1418,10 +1882,10 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       )}
       {/* ── 미니 플로팅 버튼 (항상 렌더, minimized일 때 표시) ── */}
       <div
-        className={`w-[76px] h-[76px] rounded-full overflow-hidden cursor-pointer select-none touch-none ${isDragging || dismissing ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
+        className={`w-[64px] h-[64px] rounded-full cursor-pointer select-none touch-none ${isDragging || dismissing ? "" : "transition-all duration-400"} ${dismissing ? "scale-0 opacity-0" : minimized ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"}`}
         style={floatPos
-          ? { position: "absolute", left: floatPos.x - 38, top: floatPos.y - 38, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none", pointerEvents: minimized ? "auto" : undefined }
-          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, boxShadow: "0 4px 24px rgba(0,0,0,0.16)", transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none", pointerEvents: minimized ? "auto" : undefined }
+          ? { position: "absolute", left: floatPos.x - 32, top: floatPos.y - 32, zIndex: 50, transitionDelay: isDragging ? "0s" : (minimized ? "0.15s" : "0s"), touchAction: "none", pointerEvents: minimized ? "auto" : undefined }
+          : { position: "absolute", right: 16, bottom: 104, zIndex: 50, transitionDelay: minimized ? "0.15s" : "0s", touchAction: "none", pointerEvents: minimized ? "auto" : undefined }
         }
         onClick={() => { if (wasDraggedRef.current) { wasDraggedRef.current = false; return; } if (!showDismiss && !draggingRef.current) { setMinimized(false); setFloatPos(null); } }}
         onTouchStart={handleFloatTouchStart}
@@ -1429,7 +1893,17 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         onTouchEnd={handleFloatTouchEnd}
         onMouseDown={handleFloatMouseDown}
       >
-        <div className={`absolute inset-0 rounded-full backdrop-blur-[4px]`} style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.15)" : "none" }} />
+        {/* 글로우 이펙트: 컬러 그라디언트 */}
+        <div className="absolute inset-[-3px] rounded-full overflow-hidden pointer-events-none animate-glow-breathe">
+          <div
+            className="absolute inset-[-100%] animate-gradient-spin"
+            style={{
+              background:
+                "conic-gradient(from 0deg, #e01080, rgba(255,255,255,0.4), #9010e0, #1a50e0, rgba(255,255,255,0.4), #00b8e0, #9010e0, #e05000, rgba(255,255,255,0.4), #e01080)",
+            }}
+          />
+        </div>
+        <div className={`absolute inset-0 rounded-full overflow-hidden backdrop-blur-[4px]`} style={{ backgroundColor: darkMode ? "rgba(44, 44, 46, 0.9)" : "rgba(255,255,255,0.74)", boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.15)" : "none" }} />
         {/* 녹음 중일 때만 우측 상단 빨간 점 표시 (플로팅 모드 + 녹음 중) */}
         {minimized && meetingRecording && (
           <div
@@ -1453,20 +1927,20 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
       <motion.div
         className="absolute"
         animate={{
-          bottom: isOpen ? 16 + keyboardOffset : -300,
+          bottom: isOpen ? (keyboardOffset > 0 ? 4 + keyboardOffset : 26) : -300,
           opacity: isOpen && !minimized ? 1 : 0,
           scale: minimized ? 0.3 : 1,
           y: minimized ? 40 : 0,
         }}
         transition={{
-          bottom: { type: "spring", stiffness: 300, damping: 30, mass: 0.8 },
+          bottom: { type: "tween", duration: 0.28, ease: [0.25, 0.1, 0.25, 1] },
           opacity: { duration: 0.2 },
           scale: { duration: 0.3 },
           y: { duration: 0.3 },
         }}
         style={{
-          left: 16,
-          right: 16,
+          left: 12,
+          right: 12,
           top: (navActive || navArrived) ? 100 : undefined,
           transformOrigin: "bottom right",
           pointerEvents: isOpen && !minimized ? "auto" : "none",
@@ -1495,9 +1969,9 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               boxShadow: darkMode ? "inset 0 0 0 1px rgba(255,255,255,0.12)" : "inset 0 0 0 1px #ffffff, 0 0 24px rgba(0,0,0,0.12), 0 0 48px rgba(0,0,0,0.06)",
               // 키보드가 올라오면 카드 최대 높이 제한 (가용 화면 - bottom 여백 - 상단 여백)
               ...(keyboardOffset > 0 ? { maxHeight: `calc(100dvh - ${keyboardOffset + 32}px)` } : {}),
-              // 대화 중일 때만 높이 고정 (채팅 영역 안정), 그 외에는 auto (팝업이 자연스럽게 줄어듦)
+              // 대화 중일 때만 높이 고정 (채팅 영역 안정), 그 외에는 auto
               ...(popupLockedHeight && chatMessages.length > 0 && !navActive && !navArrived && !meetingMode && !wishlistView && !choonsikCardView ? {
-                height: keyboardOffset > 0 ? undefined : popupLockedHeight,
+                height: 320,
                 display: "flex",
                 flexDirection: "column" as const,
               } : {}),
@@ -1505,6 +1979,19 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
             onClick={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
+              {/* ── 우상단 내리기 버튼 ── */}
+              {!meetingMode && !minimized && !textMode && !wishlistView && (
+                <button
+                  type="button"
+                  className={`absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center active:opacity-70 backdrop-blur-[20px] ${darkMode ? "bg-white/20" : "bg-white/60"}`}
+                  style={{ boxShadow: darkMode ? "inset 0 0 0 0.5px rgba(255,255,255,0.15)" : "inset 0 0 0 0.5px rgba(255,255,255,0.8), 0 2px 8px rgba(0,0,0,0.06)" }}
+                  onClick={() => { setAiKbVisible(false); setMinimized(true); }}
+                >
+                  <svg className={`w-4 h-4 ${darkMode ? "text-gray-300" : "text-[#000000]"}`} style={{ marginTop: 1 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="square" strokeLinejoin="miter" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
               {/* ── 회의 모드 UI ── */}
               {meetingMode && (
                 <div className="relative flex flex-col items-center justify-between px-5 pt-8 pb-5 pointer-events-auto" style={{ height: 240 }}>
@@ -1640,8 +2127,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               {giftResult && textMode && (
                 <div className="w-full px-4 pt-4 pb-2 pointer-events-auto" style={{ flexShrink: 0 }}>
                   <div className="flex items-center gap-2.5 mb-3">
-                    <SquircleAvatar src="/profile-ieun.png" alt={giftResult} className="w-8 h-8" />
-                    <p className={`text-[14px] font-bold leading-tight ${darkMode ? "text-gray-100" : "text-gray-900"}`}>{giftResult}의 위시리스트 🎁</p>
+                    <SquircleAvatar src="/profile-haesu.png" alt="와이프 해수" className="w-8 h-8" />
+                    <p className={`text-[14px] font-bold leading-tight ${darkMode ? "text-gray-100" : "text-gray-900"}`}>와이프의 위시리스트 🎁</p>
                   </div>
                   <div className="flex overflow-x-auto scrollbar-hide gap-3 pb-1">
                     {WISHLIST_ITEMS.map((item, i) => (
@@ -1659,7 +2146,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 </div>
               )}
-              {/* ── 춘식이 사원증 카드 (normal flow, 레이어 높이 유연 확장) ── */}
+              {/* ── 강아지 놀이터 카드 (normal flow, 레이어 높이 유연 확장) ── */}
               {choonsikCardView && !textMode && (
                 <div className="flex items-center justify-center w-full pointer-events-auto px-4" style={{ paddingTop: 72, paddingBottom: 48 }}>
                   <img
@@ -1677,32 +2164,149 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
               {/* ── 알림 & 일기 리스트 뷰 ── */}
               {notificationListView && !textMode && (
-                <div className="w-full px-4 pt-10 pb-4 pointer-events-auto overflow-y-auto scrollbar-hide" style={{ maxHeight: keyboardOffset > 0 ? 600 - keyboardOffset : 600 }}>
-                  <p className={`text-[18px] font-semibold mb-1 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontFamily: "'Poppins', sans-serif", marginLeft: 4, marginTop: -12 }}><img src="/voice-effect.png" alt="" className="inline-block w-[26px] h-[26px] mr-1.5 -mt-0.5" />Kanana Journal</p>
+                <div className="w-full px-4 pt-10 pb-4 pointer-events-auto overflow-y-auto scrollbar-hide" style={{ maxHeight: keyboardOffset > 0 ? 660 - keyboardOffset : 660 }}>
+                  {/* 로고 */}
+                  <p className={`mb-3 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ marginLeft: 4, marginTop: -12 }}><img src="/voice-effect.png" alt="" className="inline-block w-[40px] h-[40px]" /></p>
 
-                  {/* 오늘의 일기 디스크립션 */}
-                  <p
-                    className={`text-[13px] leading-relaxed w-[80%] ${darkMode ? "text-gray-300" : "text-[#191919]"}`}
-                    style={{ animation: "noti-fade-in 0.3s ease-out 0s both", marginLeft: 4, marginBottom: 24 }}
-                  >Dannion.K님, 오늘 하루를 분석한 내용을 바탕으로 하루를 기록해드릴게요. 대화, 감정, 일정을 모아 나만의 일기를 완성해보세요.</p>
+                  {/* ── 탭 바: 오늘의 브리핑 / 오늘의 저널 ── */}
+                  <div className="flex gap-3 mt-2 mb-3" style={{ marginLeft: 4 }}>
+                    {(["briefing", "journal"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        className="text-[17px] pb-1 transition-colors duration-200"
+                        style={{
+                          fontWeight: journalTab === tab ? 800 : 700,
+                          color: journalTab === tab ? (darkMode ? "#fff" : "#191919") : (darkMode ? "rgba(255,255,255,0.35)" : "#C0C0C0"),
+                          borderBottom: "none",
+                        }}
+                        onClick={() => setJournalTab(tab)}
+                      >
+                        {tab === "briefing" ? "오늘의 브리핑" : "오늘의 저널"}
+                      </button>
+                    ))}
+                  </div>
 
-                  {/* 나머지 알림 셀 리스트 */}
-                  {[
-                    { title: "오늘의 감정 온도계", desc: "오늘 가장 많이 사용한 단어는 '감사', '대박', '바쁨'이었어요. 긍정적인 대화가 평소보다 30% 많았던 활기찬 하루였네요!", buttons: [], img: "/diary-photo-4.png" },
-                    { title: "관계 에너지 소모 리포트", desc: "오늘 5개의 단체 채팅방에서 약 300개의 메시지를 읽으셨어요. 조금 피로할 수 있는 수치예요. 지금은 '방해 금지 모드'를 켜고 휴식하는 건 어떨까요?", buttons: [], img: "/diary-photo-5.png" },
-                    { title: "고마운 마음 전달 제안", desc: "오늘 이해수님과 가장 긴 대화를 나누며 위로를 받으셨네요. 자기 전에 '오늘 고마웠어'라고 짧은 인사를 남겨보는 건 어떨까요?", buttons: ["이해수님에게 메시지 보내기"], profiles: ["/profile-ieun.png"] },
-                    { title: "대화의 연속성 유지", desc: "내일은 부모님 생신이네요. 오늘 가족방에서 나왔던 식당 예약 확인을 한 번 더 체크해 보세요.", buttons: ["식당 예약 확인", "가족방 열기"], profiles: ["/profile-dannion.png", "/profile-yuna.png"] },
-                    { title: "미답장 예약 설정", desc: "아직 답장하지 못한 박채원님의 메시지가 있어요. 지금 답하기 어렵다면, 내일 출근 시간에 맞춰 예약 메시지를 작성해 볼까요?", buttons: ["예약 메시지 작성하기"], img: "/diary-photo-2.png" },
-                  ].map((item, i) => (
+                  {/* ── 오늘의 브리핑 섹션 ── */}
+                  {journalTab === "briefing" && (persona.id === "golf" ? [
+                    { title: "골프 라운딩 일정", desc: <>오늘 아침 6시 춘천 라비에벨 CC에서 골프 약속이 있어요. 분당에서 약 2시간 소요되니 <span style={{ color: "#000000", fontWeight: 600 }}>4시에는 출발</span>하셔야 해요!</>, buttons: ["카카오 네비  소요시간 120분"], img: "/golf-cc.png" },
+                    { title: "16°C", desc: "춘천 현재 기온 · 최고 16°C · 최저 4°C · 바람막이를 챙기세요.", buttons: [], icon: "wind" as const },
+                    { title: "오늘의 복장 추천", desc: <>새벽 기온이 낮고 바람이 있어요. <span style={{ color: "#000000", fontWeight: 600 }}>기능성 바람막이 + 얇은 기모 이너 조합을 추천</span>드려요. 라운딩 후엔 기온이 올라가니 레이어드가 좋아요.</>, buttons: [], carousel: ["/golf-outfit-1.png", "/golf-outfit-2.png", "/golf-outfit-3.png"], shopIcon: true },
+                    { title: "오후 미팅 안내", desc: <>돌아오시면 <span style={{ color: "#000000", fontWeight: 600 }}>오후 3시에 AI 전략 리뷰 미팅</span>이 있어요. 본관 12층 대회의실, 참석자 7명. 지난 회의록과 Q2 KPI 자료를 캔버스에 정리해 두었어요.</>, buttons: ["미팅 일정 2026년 AI 전략 리뷰"] },
+                    { title: "💍 결혼기념일 리마인더", desc: <>오늘은 <span style={{ color: "#000000", fontWeight: 600 }}>25주년 결혼기념일</span>이에요! 라운딩 후 저녁 약속에 늦지 않도록 <span style={{ color: "#000000", fontWeight: 600 }}>오후 5시까지</span>는 돌아오셔야 해요. 해수님이 좋아하는 판교 스시이도 7시 예약을 잡아드릴까요?</>, buttons: ["레스토랑 예약하기", "선물 추천 보기"] },
+                    { title: "기념일 선물 준비", desc: <>해수님의 최근 카톡 대화와 위시리스트를 분석했어요. <span style={{ color: "#000000", fontWeight: 600 }}>조말론 우드 세이지 앤 씨 솔트 향수</span>를 가장 많이 언급하셨어요. 카카오쇼핑 최저가 152,000원이에요.</>, buttons: ["카카오쇼핑 바로가기"] },
+                  ] : persona.id === "shopping" ? [
+                    { title: "오늘의 쇼핑 추천", desc: <>관심 등록한 <span style={{ color: "#000000", fontWeight: 600 }}>나이키 에어맥스 97이 15% 할인</span> 중이에요. 오늘 자정까지 한정 세일이에요!</>, buttons: ["카카오쇼핑 바로가기"], img: "/diary-photo-1.png" },
+                    { title: "22°C", desc: "서울 현재 기온 · 최고 22°C · 최저 13°C · 가벼운 외투면 충분해요.", buttons: [], icon: "wind" as const },
+                    { title: "스타일 추천", desc: <>오늘 날씨에 맞는 <span style={{ color: "#000000", fontWeight: 600 }}>봄 데일리룩 코디</span>를 준비했어요. 트렌디한 조합을 확인해 보세요!</>, buttons: [], carousel: ["/diary-photo-1.png", "/diary-photo-2.png", "/diary-photo-3.png"], shopIcon: true },
+                    { title: "선물 리마인더", desc: <>다음 주 <span style={{ color: "#000000", fontWeight: 600 }}>친구 생일</span>이에요. 위시리스트에 담아둔 아이템으로 선물을 준비해 볼까요?</>, buttons: ["위시리스트 확인"] },
+                    { title: "배송 현황", desc: <>어제 주문한 <span style={{ color: "#000000", fontWeight: 600 }}>무신사 패키지가 배송 중</span>이에요. 오후 3시쯤 도착 예정이에요.</>, buttons: ["배송 조회하기"] },
+                  ] : [
+                    { title: "저녁 약속", desc: <>오늘 <span style={{ color: "#000000", fontWeight: 600 }}>저녁 7시 강남역 근처</span>에서 대학 동기 모임이 있어요. 장소가 아직 미정이에요!</>, buttons: ["카카오맵 맛집 추천"], img: "/diary-photo-6.png" },
+                    { title: "19°C", desc: "서울 현재 기온 · 최고 19°C · 최저 11°C · 저녁엔 쌀쌀해요, 겉옷 챙기세요.", buttons: [], icon: "wind" as const },
+                    { title: "약속 준비", desc: <>모임 장소 후보 3곳을 <span style={{ color: "#000000", fontWeight: 600 }}>대학동기 단톡방</span>에 공유해 드릴까요? 투표로 정하면 편해요.</>, buttons: ["맛집 투표 만들기"] },
+                    { title: "교통 안내", desc: <>분당에서 강남역까지 <span style={{ color: "#000000", fontWeight: 600 }}>약 40분 소요</span>돼요. 6시 20분에는 출발하세요!</>, buttons: ["카카오 네비  소요시간 40분"] },
+                    { title: "모임 알림", desc: <><span style={{ color: "#000000", fontWeight: 600 }}>대학동기 단톡방</span>에 "오늘 저녁 7시 다들 올 수 있지?" 메시지를 보내드릴까요?</>, buttons: ["대학동기 단톡방에 메시지 보내기"] },
+                  ]).map((item, i) => (
                     <div
                       key={i}
                       className={`rounded-[16px] p-4 mb-2 ${darkMode ? "bg-white/8" : "bg-white/80"}`}
                       style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)", animation: `noti-fade-in 0.3s ease-out ${i * 0.06}s both` }}
                     >
-                      <p className={`text-[14px] mb-0.5 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontWeight: item.title === "오늘의 감정 온도계" ? 700 : 600 }}>{item.title}</p>
+                      {item.title && <p className={`mb-0.5 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontWeight: 700, fontSize: item.title.includes("°C") ? 24 : 14 }}>{item.title}</p>}
+                      <div className="flex gap-3">
+                        <p className={`flex-1 min-w-0 text-[13px] ${darkMode ? "text-gray-300" : "text-[#555555]"}`} style={{ lineHeight: 1.5 }}>{item.desc}</p>
+                        {(item as { icon?: string }).icon === "wind" ? (
+                          <div className="w-[42px] h-[42px] rounded-[8px] flex-shrink-0 flex items-center justify-center" style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "#EDF3F8" }}>
+                            <svg className={darkMode ? "text-gray-300" : "text-[#5B9BD5]"} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17.7 7.7A2.5 2.5 0 1 1 19 12H2" />
+                              <path d="M9.6 4.6A2 2 0 1 1 11 8H2" />
+                              <path d="M12.6 19.4A2 2 0 1 0 14 16H2" />
+                            </svg>
+                          </div>
+                        ) : item.img ? <img src={item.img} alt="" className="w-[42px] h-[42px] rounded-[8px] object-cover flex-shrink-0" /> : null}
+                      </div>
+                      {(item as { carousel?: string[] }).carousel && (
+                        <div className="mt-2 -mx-1 overflow-x-auto scrollbar-hide">
+                          <div className="flex gap-1.5 px-1" style={{ width: "max-content" }}>
+                            {(item as { carousel?: string[] }).carousel!.map((src, ci) => (
+                              <div key={ci} className="w-[104px] h-[104px] flex-shrink-0 rounded-[10px] overflow-hidden relative">
+                                <img src={src} alt="" className="w-full h-full object-cover" />
+                                {(item as { shopIcon?: boolean }).shopIcon && (
+                                  <div className="absolute bottom-[5px] right-[5px] w-[32px] h-[32px] rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 28" style={{ marginTop: -1 }} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="6" width="18" height="18" rx="2" />
+                                      <path d="M16 12a4 4 0 0 1-8 0" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {item.buttons.length > 0 && (
+                        <div className="flex gap-2 flex-wrap mt-2">
+                          {item.buttons.map((label) => {
+                            const naviMatch = label.match(/^(카카오 네비)\s+(.+)$/) || label.match(/^(미팅 일정)\s+(.+)$/) || label.match(/^(골프패밀리 단톡방에)\s+(.+)$/);
+                            return (
+                            <button
+                              key={label}
+                              type="button"
+                              className={`px-3 h-[36px] rounded-full text-[13px] font-medium border ${darkMode ? "border-white/20 text-gray-200 bg-transparent" : "border-white bg-white"}`}
+                              style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)" }}
+                              onClick={() => {
+                                setNotificationListView(false);
+                                onNotiClose?.();
+                                updateInputText(label);
+                                setTextMode(true);
+                                setTimeout(() => handleTextSend(), 50);
+                              }}
+                            >
+                              {naviMatch ? (<><span style={{ color: "#000000", fontWeight: 600 }}>{naviMatch[1]}</span>{naviMatch[1] === "카카오 네비" ? <span style={{ color: "#4A8DF6", fontWeight: 700 }}> 소요시간 {naviMinutes}분</span> : <span style={{ color: "#4A8DF6", fontWeight: 600 }}> {naviMatch[2]}</span>}</>) : <span style={{ color: "#4A8DF6" }}>{label}</span>}
+                            </button>
+                          );})}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* ── 오늘의 저널 섹션 ── */}
+                  {journalTab === "journal" && (persona.id === "golf" ? [
+                    { title: "라운딩 스코어 기록", desc: "오늘 라비에벨 CC에서의 라운딩 스코어를 기록해 보세요. 지난달 평균 대비 퍼팅 성공률이 올라가고 있어요!", buttons: ["스코어 기록하기"], img: "/journal-golf.png" },
+                    { title: "함께한 멤버 태그", desc: "오늘 골프패밀리 멤버들과 함께한 라운딩 사진을 정리해 드릴까요? 단톡방에 공유하기 좋게 앨범으로 만들어 드려요.", buttons: ["앨범 만들기"], carousel: ["/journal-cake.png", "/journal-birthday.jpg", "/journal-kids.jpg"] },
+                    { title: "💍 기념일 저녁 준비 완료", desc: "판교 스시이도 7시 예약 확정, 조말론 향수 선물 포장 완료! 해수님에게 \"오늘 저녁 기대해도 좋아 😊\" 메시지를 보내드릴까요?", buttons: ["해수님에게 메시지 보내기"] },
+                    { title: "다음 라운딩 예약", desc: "골프패밀리 멤버들이 다음 주말 라운딩을 원하고 있어요. 일정 투표를 만들어 볼까요?", buttons: ["일정 투표 만들기"], icon: "clock" as const },
+                    { title: "오늘 하루 요약", desc: "새벽 라운딩 → 오후 미팅 → 저녁 결혼기념일 디너. 바쁘지만 알찬 하루였어요! 내일은 여유롭게 보내세요.", buttons: [], img: "/diary-photo-2.png" },
+                  ] : persona.id === "shopping" ? [
+                    { title: "오늘의 쇼핑 리뷰", desc: "오늘 구경한 아이템들을 정리했어요. 관심 목록에 추가해 둘까요?", buttons: ["위시리스트 정리"], img: "/diary-photo-4.png" },
+                    { title: "가격 변동 알림", desc: "찜해둔 상품 3개의 가격이 변동됐어요. 최저가를 놓치지 마세요!", buttons: ["가격 비교 보기"], img: "/diary-photo-5.png" },
+                    { title: "스타일 기록", desc: "오늘 마음에 들었던 코디를 저장해 두세요. 나만의 스타일북을 만들어 드릴게요.", buttons: ["스타일북 저장"], carousel: ["/diary-photo-1.png", "/diary-photo-2.png", "/diary-photo-3.png"] },
+                    { title: "친구 추천 공유", desc: "관심 아이템을 친구들에게 공유해 보세요. 함께 쇼핑하면 더 즐거워요!", buttons: ["친구에게 추천하기"], profiles: ["/profile-dannion.png", "/profile-ieun.png"] },
+                    { title: "포인트 현황", desc: "카카오페이 포인트 2,350원이 있어요. 다음 쇼핑에 활용하세요!", buttons: [], icon: "clock" as const },
+                  ] : [
+                    { title: "모임 후기 기록", desc: "오늘 대학 동기 모임은 어땠나요? 간단한 후기를 남겨보세요.", buttons: ["후기 작성하기"], img: "/diary-photo-4.png" },
+                    { title: "사진 정리", desc: "오늘 모임에서 찍은 사진을 정리해 드릴까요? 단톡방에 공유하기 좋게 앨범을 만들어 드려요.", buttons: ["앨범 만들기"], carousel: ["/diary-photo-1.png", "/diary-photo-2.png", "/diary-photo-3.png", "/diary-photo-5.png"] },
+                    { title: "감사 인사 전달", desc: "오늘 모임을 준비해준 친구에게 감사 인사를 보내보세요.", buttons: ["감사 메시지 보내기"], profiles: ["/profile-dannion.png", "/profile-yuna.png"] },
+                    { title: "다음 약속 잡기", desc: "다음 모임 일정을 정해볼까요? 투표를 만들어 단톡방에 공유해 드릴게요.", buttons: ["일정 투표 만들기"], icon: "clock" as const },
+                    { title: "맛집 기록", desc: "오늘 방문한 식당이 마음에 들었다면 카카오맵에 리뷰를 남겨보세요!", buttons: ["리뷰 남기기"], img: "/diary-photo-6.png" },
+                  ]).map((item, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-[16px] p-4 mb-2 ${darkMode ? "bg-white/8" : "bg-white/80"}`}
+                      style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)", animation: `noti-fade-in 0.3s ease-out ${i * 0.06}s both` }}
+                    >
+                      <p className={`text-[14px] mb-0.5 ${darkMode ? "text-white" : "text-[#191919]"}`} style={{ fontWeight: 700 }}>{item.title}</p>
                       <div className="flex gap-3">
                         <p className={`flex-1 min-w-0 text-[13px] leading-relaxed ${darkMode ? "text-gray-400" : "text-[#767676]"}`}>{item.desc}</p>
-                        {(item as { profiles?: string[] }).profiles ? (
+                        {(item as { icon?: string }).icon === "clock" ? (
+                          <div className="w-[42px] h-[42px] rounded-[8px] flex-shrink-0 flex items-center justify-center" style={{ background: darkMode ? "rgba(255,255,255,0.1)" : "#EDF3F8" }}>
+                            <svg className={darkMode ? "text-gray-300" : "text-[#5B9BD5]"} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                          </div>
+                        ) : (item as { profiles?: string[] }).profiles ? (
                           <div className="flex -space-x-2 flex-shrink-0">
                             {(item as { profiles?: string[] }).profiles!.map((src, pi) => (
                               <div key={pi} className="w-[36px] h-[36px] p-[2px]" style={{ WebkitMaskImage: "url(/squircle.svg)", WebkitMaskSize: "cover", maskImage: "url(/squircle.svg)", maskSize: "cover", background: "white" }}>
@@ -1716,6 +2320,17 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           <img src={item.img} alt="" className="w-[42px] h-[42px] rounded-[8px] object-cover flex-shrink-0" />
                         ) : null}
                       </div>
+                      {(item as { carousel?: string[] }).carousel && (
+                        <div className="mt-2 -mx-1 overflow-x-auto scrollbar-hide">
+                          <div className="flex gap-1.5 px-1" style={{ width: "max-content" }}>
+                            {(item as { carousel?: string[] }).carousel!.map((src, ci) => (
+                              <div key={ci} className="w-[104px] h-[104px] flex-shrink-0 rounded-[10px] overflow-hidden">
+                                <img src={src} alt="" className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex gap-2 flex-wrap mt-2">
                         {item.buttons.map((label) => (
                           <button
@@ -1737,47 +2352,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     </div>
                   ))}
 
-                  {/* 사진 캐로셀 */}
-                  <div
-                    className="mt-4 -mx-4 px-4 overflow-x-auto scrollbar-hide"
-                    style={{ animation: "noti-fade-in 0.3s ease-out 0.06s both" }}
-                  >
-                    <div className="flex gap-1.5" style={{ width: "max-content" }}>
-                      {[
-                        "/diary-photo-1.png",
-                        "/diary-photo-2.png",
-                        "/diary-photo-3.png",
-                        "/diary-photo-4.png",
-                        "/diary-photo-5.png",
-                        "/diary-photo-6.png",
-                      ].map((src, i) => (
-                        <div key={i} className="w-[96px] h-[96px] flex-shrink-0 rounded-[15px] overflow-hidden">
-                          <img src={src} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  {/* 하단 CTA 버튼 */}
-                  <div className="flex gap-2 mt-4">
-                    {["나챗방으로 전송", "Kanvas에 기록"].map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        className={`flex-1 h-[44px] rounded-full text-[14px] font-medium bg-white text-[#191919]`}
-                        style={{ boxShadow: "0 0 3px rgba(0,0,0,0.06)" }}
-                        onClick={() => {
-                          setNotificationListView(false);
-                          onNotiClose?.();
-                          updateInputText(label);
-                          setTextMode(true);
-                          setTimeout(() => handleTextSend(), 50);
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -1786,17 +2361,29 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                 const centerHidden = textMode || choonsikCardView || directionMode || darkmodeView || wishlistView || meetingMode || notificationListView;
                 return (
               <div
-                className="flex flex-col items-center justify-center gap-1 pointer-events-none overflow-hidden"
+                className={`flex flex-col items-center justify-center gap-1 overflow-hidden ${centerHidden ? "pointer-events-none" : "pointer-events-auto cursor-pointer"}`}
                 style={{
                   // 대화 중 flex 레이아웃: 센터 0 → 채팅이 flex:1 차지
                   ...(popupLockedHeight && chatMessages.length > 0 ? { flex: 0, minHeight: 0 } : {}),
                   opacity: centerHidden ? 0 : 1,
                   maxHeight: centerHidden ? 0 : 400,
-                  paddingTop: centerHidden ? 0 : 32,
+                  paddingTop: centerHidden ? 0 : 24,
                   paddingBottom: centerHidden ? 0 : 16,
-                  transform: centerHidden ? "translateY(8px)" : "translateY(0)",
-                  visibility: centerHidden ? "hidden" : "visible",
-                  transition: `opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1), max-height 0.4s cubic-bezier(0.32, 0.72, 0, 1), padding 0.4s cubic-bezier(0.32, 0.72, 0, 1), transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s ${centerHidden ? "0.4s" : "0s"}`,
+                  transform: centerHidden ? "scale(0.96)" : "scale(1)",
+                  transition: `opacity 0.2s ease-out, max-height 0.28s ease-out, padding 0.28s ease-out, transform 0.2s ease-out`,
+                }}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  if (centerHidden || ttsSpeaking || isLoading) return;
+                  if (voiceStandby) {
+                    setVoiceStandby(false);
+                    doStart();
+                  } else {
+                    doStop();
+                    setVoiceStandby(true);
+                    setTranscript("");
+                    setInterimText("");
+                  }
                 }}
               >
                 {summaryResult ? (
@@ -1814,7 +2401,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         ) : (
                           <div className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`} style={{ ...AI_RECEIVED_BUBBLE_STYLE, lineHeight: 1.65, wordBreak: "keep-all", whiteSpace: "pre-line" }}>
                             {msg.id === "sum-a-1" ? (
-                              <>오늘 저녁 7시에 판교에서 만나기로 함. <span className="font-semibold">판교 스테이크 집 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함</span>. 해수가 회사 일이 늦게 끝나서 판교역 대신 사무실 앞으로 픽업하기로 함.</>
+                              <>오늘 저녁 7시에 판교에서 만나기로 함. <span className="font-semibold">판교 스시이도 할인 쿠폰이 오늘까지라 집에 들러서 꼭 챙겨가야 함</span>. 해수가 회사 일이 늦게 끝나서 판교역 대신 사무실 앞으로 픽업하기로 함.</>
                             ) : (
                               msg.text
                             )}
@@ -1830,24 +2417,29 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   </div>
                 ) : (
                   /* ── 보이스 오브 이펙트 ── */
-                  <div className="relative w-[104px] h-[104px]">
+                  <div className={`relative ${ttsSpeaking ? "w-[120px] h-[120px]" : "w-[96px] h-[96px]"} transition-all duration-500`}>
                     <img
                       src="/voice-effect.png"
                       alt=""
-                      className="absolute inset-0 w-full h-full object-contain animate-voice-breathe"
+                      className={`absolute inset-0 w-full h-full object-contain ${ttsSpeaking ? "animate-gradient-spin" : "animate-voice-breathe"}`}
                     />
+                    {ttsSpeaking && (
+                      <div className="absolute inset-0 rounded-full animate-glow-breathe" style={{ background: "radial-gradient(circle, rgba(255,83,138,0.3) 0%, transparent 70%)" }} />
+                    )}
                   </div>
                 )}
-                {!summaryResult && !choonsikCardView && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
-                  style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#1C1C1E") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#ffffff" : "#374151") }}
+                {!summaryResult && !choonsikCardView && !ttsSpeaking && !isLoading && <p className="text-[17px] font-medium text-center px-6 max-w-full leading-relaxed"
+                  style={{ color: isLoading ? (darkMode ? "#e5e5e5" : "#000000") : ttsSpeaking ? (darkMode ? "#ffffff" : "#000000") : statusMessage ? (statusMessage.includes("인식하지 못했어요") ? "#3b82f6" : "#FF538A") : (transcript || interimText) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#ffffff" : "#000000") }}
                 >
                   {isLoading
                     ? (statusMessage || "처리 중...")
-                    : statusMessage
-                      ? statusMessage
-                      : transcript || interimText
-                        ? <><span>{transcript}</span><span>{interimText}</span></>
-                        : replyMode ? "이해수에게 답장" : "듣고 있어요! 편하게 말씀해 주세요."}
+                    : ttsSpeaking
+                      ? "브리핑을 읽어드리고 있어요"
+                      : statusMessage
+                        ? statusMessage
+                        : transcript || interimText
+                          ? <><span>{transcript}</span><span>{interimText}</span></>
+                          : messageTargetRef.current ? `${messageTargetRef.current}님에게 보낼 메시지를 말씀해 주세요` : replyMode ? "와이프 해수에게 답장" : "듣고 있어요! 편하게 말씀해 주세요."}
                 </p>}
               </div>
                 );
@@ -1939,19 +2531,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       {/* 지도 + 마커 */}
                       <div className="mx-4 mt-3 flex-1 rounded-2xl overflow-hidden relative" style={{ minHeight: 140 }}>
                         <img src="/map-pangyo.png" alt="판교역 지도" className="absolute inset-0 w-full h-full object-cover" />
-                        {/* SVG 경로선 */}
-                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ pointerEvents: "none" }}>
-                          <polyline
-                            points={NAV_STEPS.map(s => `${s.markerX},${s.markerY}`).join(" ")}
-                            fill="none"
-                            stroke="#3478F6"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeDasharray="2 2"
-                            opacity="0.6"
-                          />
-                        </svg>
                         {/* 펄스 링 */}
                         <div
                           className="absolute w-5 h-5 rounded-full bg-[#3478F6]/30 animate-nav-pulse"
@@ -2025,17 +2604,6 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     {/* 지도 + 도착 마커 고정 */}
                     <div className="mx-4 mt-3 flex-1 rounded-2xl overflow-hidden relative" style={{ minHeight: 140 }}>
                       <img src="/map-pangyo.png" alt="판교역 지도" className="absolute inset-0 w-full h-full object-cover" />
-                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ pointerEvents: "none" }}>
-                        <polyline
-                          points={NAV_STEPS.map(s => `${s.markerX},${s.markerY}`).join(" ")}
-                          fill="none"
-                          stroke="#34C759"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          opacity="0.6"
-                        />
-                      </svg>
                       {/* 도착 마커 */}
                       <div
                         className="absolute w-6 h-6 rounded-full bg-[#34C759] border-2 border-white flex items-center justify-center"
@@ -2159,8 +2727,8 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   >
                       {/* Header: 프로필 + 위시리스트 */}
                       <div className="flex items-center gap-2.5 px-5 pt-5 pb-3">
-                        <SquircleAvatar src="/profile-ieun.png" alt={giftResult || "친구"} className="w-9 h-9" />
-                        <p className={`text-[15px] font-bold leading-tight ${darkMode ? "text-gray-100" : "text-gray-900"}`}>{giftResult || "친구"}님의 위시리스트</p>
+                        <SquircleAvatar src="/profile-haesu.png" alt="와이프 해수" className="w-9 h-9" />
+                        <p className={`text-[15px] font-bold leading-tight ${darkMode ? "text-gray-100" : "text-gray-900"}`}>와이프의 위시리스트</p>
                       </div>
 
                       {/* Product card */}
@@ -2193,7 +2761,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
                       {/* Recommendation reason */}
                       <p className={`mx-4 mt-3 text-[15px] leading-relaxed ${darkMode ? "text-gray-200" : "text-[#000000]"}`}>
-                        나영님이 평소 뷰티 제품에 관심이 많고, 위시리스트에 직접 담아둔 상품이에요. 선물 만족도가 높을 거예요!
+                        사모님께서 카톡 대화에서 자주 언급하신 상품이에요. 결혼 25주년 기념일 선물로 만족도가 높을 거예요!
                       </p>
 
                       {/* Buttons */}
@@ -2250,20 +2818,12 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                         </svg>
                       </div>
                       <p className={`text-[16px] font-semibold ${darkMode ? "text-gray-100" : "text-[#191919]"}`}>
-                        {giftResult || "친구"}에게 선물하기를 완료했어요
+                        선물하기를 완료했어요
                       </p>
                       <p className={`text-[14px] mt-2 leading-relaxed ${darkMode ? "text-gray-400" : "text-[#767676]"}`}>
                         결제 정보는 카카오페이 알림톡으로<br />알려드릴게요.
                       </p>
                       <div className="mt-6 flex gap-3 w-full">
-                        <button
-                          type="button"
-                          className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:opacity-80 transition-colors ${darkMode ? "text-gray-200" : "text-gray-700"}`}
-                          style={{ background: darkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)" }}
-                          onClick={() => { setWishlistView(false); setWishlistPhase("product"); setGiftResult(null); onClose(); }}
-                        >
-                          친구와 1:1 채팅
-                        </button>
                         <button
                           type="button"
                           className={`flex-1 h-[44px] rounded-[40px] text-[14px] font-semibold active:bg-[#333] transition-colors ${darkMode ? "text-black bg-[#FEE500]" : "text-white bg-[#191919]"}`}
@@ -2297,32 +2857,92 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       className={`flex mb-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       {msg.role === "user" ? (
-                        <div className={AI_SENT_BUBBLE_CLASS} style={AI_SENT_BUBBLE_STYLE}>
-                          {msg.text}
+                        <div className="flex flex-col items-end gap-2">
+                          {msg.image && (
+                            <img src={msg.image} alt="" className="w-[160px] h-[160px] rounded-[16px] object-cover" />
+                          )}
+                          <div className={AI_SENT_BUBBLE_CLASS} style={AI_SENT_BUBBLE_STYLE}>
+                            {msg.text}
+                          </div>
                         </div>
                       ) : (() => {
                         const isTyping = msg.id === typingMessageId;
                         const fullChars = Array.from(msg.text);
                         const typedCount = isTyping ? typingDisplayedLength : fullChars.length;
-                        const displayText = fullChars.slice(0, typedCount).join("");
                         const quoteMatch = msg.text.match(/💬\s*"([^"]+)"/);
                         const isTypingDone = !isTyping;
+                        // [btn:라벨] 마커 추출
+                        const btnMatches = msg.text.match(/\[btn:([^\]]+)\]/g);
+                        const btnLabels = btnMatches?.map(b => b.replace(/\[btn:|\]/g, "")) || [];
+                        const cleanText = msg.text.replace(/\n?\[btn:[^\]]+\]/g, "");
+                        const cleanChars = Array.from(cleanText);
+                        const cleanDisplayText = cleanChars.slice(0, typedCount).join("");
+                        const isCircleActive = circleActiveId === msg.id;
                         return (
                           <div className="flex flex-col items-start gap-2">
                             <div
+                              ref={(el) => { if (el) circleBubbleRefs.current.set(msg.id, el); }}
                               className={`${AI_RECEIVED_BUBBLE_CLASS} ${darkMode ? "text-gray-100" : "text-[#191919]"}`}
                               style={{
                                 ...AI_RECEIVED_BUBBLE_STYLE,
+                                position: "relative",
                                 lineHeight: 1.65,
-                                // 타이핑 중: overflow-wrap: anywhere → 글자 단위 래핑 (줄바꿈 안정)
-                                // 완료 후: word-break: keep-all → 한국어 단어 단위 줄바꿈
                                 wordBreak: isTyping ? "normal" : "keep-all",
                                 overflowWrap: isTyping ? "anywhere" : "normal",
                                 whiteSpace: isTyping ? "normal" : "pre-line",
                               }}
+                              onPointerDown={(ev) => {
+                                if (isTyping || isCircleActive) return;
+                                longPressTimerRef.current = setTimeout(() => {
+                                  ev.preventDefault();
+                                  setCircleActiveId(msg.id);
+                                }, 500);
+                              }}
+                              onPointerUp={() => {
+                                if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+                              }}
+                              onPointerCancel={() => {
+                                if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+                              }}
                             >
-                              {isTyping ? displayText : renderChatWithBold(msg.text)}
+                              {isTyping ? cleanDisplayText : renderChatWithBold(cleanText)}
+                              {isCircleActive && (
+                                <CircleToSearchOverlay
+                                  bubbleRef={{ current: circleBubbleRefs.current.get(msg.id) || null }}
+                                  darkMode={darkMode}
+                                  onAction={(text, action) => {
+                                    setCircleActiveId(null);
+                                    if (action === "interpret") {
+                                      sendChatMessage(`"${text}" 해석해줘`);
+                                    } else if (action === "shop") {
+                                      sendChatMessage(`${text} 검색해줘`);
+                                    } else if (action === "reserve") {
+                                      sendChatMessage(`${text} 예약해줘`);
+                                    } else if (action === "transfer") {
+                                      sendChatMessage(`${text} 송금해줘`);
+                                    }
+                                  }}
+                                  onDismiss={() => setCircleActiveId(null)}
+                                />
+                              )}
                             </div>
+                            {btnLabels.length > 0 && isTypingDone && (
+                              <div className="flex gap-2 ml-[14px] flex-wrap">
+                                {btnLabels.map((label) => (
+                                  <button
+                                    key={label}
+                                    type="button"
+                                    className={`px-4 h-[40px] rounded-full text-[13px] font-semibold active:opacity-70 ${darkMode ? "bg-white/15 text-gray-200" : "bg-[#F0F0F0] text-[#191919]"}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      sendChatMessage(label);
+                                    }}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                             {quoteMatch && isTypingDone && onSendReply && (
                               <div className="flex items-center gap-2 ml-[14px]">
                                 <button
@@ -2364,7 +2984,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   {aiTyping && (
                     <div className="flex justify-start mb-3">
                       <div className="py-2 ml-[12px]">
-                        <img src="/voice-effect.png" alt="로딩" className="w-8 h-8 rounded-full animate-flip-y" />
+                        <img src="/voice-effect.png" alt="로딩" className="w-[32px] h-[32px] rounded-full animate-flip-y flex-shrink-0" />
                       </div>
                     </div>
                   )}
@@ -2374,23 +2994,58 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
               )}
 
               <div
-                className="px-4 transition-all duration-[400ms]"
-                style={{ flexShrink: 0, paddingTop: getBottomPaddingTop(), paddingBottom: getBottomPaddingBottom(), height: (wishlistView || meetingMode || notificationListView) ? 0 : "auto", overflow: (wishlistView || meetingMode || notificationListView) ? "hidden" : undefined, opacity: (directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                className="px-4 transition-all duration-[280ms] relative"
+                style={{ flexShrink: 0, paddingTop: getBottomPaddingTop(), paddingBottom: getBottomPaddingBottom(), height: (wishlistView || meetingMode || notificationListView) ? 0 : "auto", overflow: (wishlistView || meetingMode || notificationListView) ? "hidden" : "visible", opacity: (directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) ? 0 : 1, pointerEvents: (directionMode || darkmodeView || wishlistView || meetingMode || notificationListView) ? "none" : "auto", transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
               >
+                {/* ── 자동완성 알약 (입력창 위에 플로팅) ── */}
+                {(() => {
+                  const suggestions = textMode && inputText.trim().length >= 1 && !textSending && !sendStatus && !aiTyping && chatMessages.length === 0
+                    ? getAutocompleteSuggestions(inputText.trim())
+                    : [];
+                  if (suggestions.length === 0) return null;
+                  return (
+                    <div
+                      className="absolute left-0 right-0 px-4 z-10"
+                      style={{ bottom: "100%", paddingBottom: 8, animation: "noti-fade-in 0.15s ease-out" }}
+                    >
+                      <div className="flex gap-[6px] overflow-x-auto scrollbar-hide">
+                        {suggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`flex-shrink-0 h-[34px] rounded-full text-[13px] font-medium whitespace-nowrap px-[14px] active:scale-95 transition-transform backdrop-blur-[20px] ${
+                              darkMode
+                                ? "text-gray-200 bg-white/15 border border-white/10"
+                                : "text-[#191919] bg-white/80 border border-white/60"
+                            }`}
+                            style={{ boxShadow: darkMode ? "none" : "0 2px 8px rgba(0,0,0,0.08)" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateInputText("");
+                              sendChatMessage(s);
+                            }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* ── 추천 칩 (초기 음성 모드에서만 표시) ── */}
                 {!directionMode && !darkmodeView && !wishlistView && (() => {
                   const chipsVisible = !textMode && !choonsikCardView && !summaryResult && !giftResult && !isLoading && !statusMessage && !transcript && !interimText;
                   return (
                   <div
-                    className="overflow-hidden transition-all duration-[400ms]"
+                    className="overflow-hidden"
                     style={{
                       opacity: chipsVisible ? 1 : 0,
                       maxHeight: chipsVisible ? 80 : 0,
-                      transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
+                      transition: "opacity 0.2s ease-out, max-height 0.28s ease-out",
                     }}
                   >
-                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-4">
-                    {getSuggestionsForContext(suggestContext, chatPartnerName, chatProductSuggestions).map((t) => {
+                  <div className="flex gap-[6px] overflow-x-auto scrollbar-hide pt-1 pb-3">
+                    {getSuggestionsForContext(suggestContext, chatPartnerName, chatProductSuggestions, persona.id, aiSuggestions).map((t) => {
                       let text = t === "다크모드 켜줘" ? (darkMode ? "다크모드 꺼줘" : "다크모드 켜줘") : t;
                       if ((suggestContext === "chat-room" || suggestContext === "chat-room-new") && text.includes("이해수") && chatPartnerName) {
                         text = text.replace("이해수", chatPartnerName);
@@ -2400,7 +3055,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       <button
                         key={`${text}-${i}`}
                         type="button"
-                        className={`flex-shrink-0 relative overflow-hidden px-[14px] h-[40px] rounded-full text-[14px] font-medium whitespace-nowrap transition-colors backdrop-blur-[30px] ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+                        className={`flex-shrink-0 relative overflow-hidden h-[40px] rounded-full text-[14px] font-medium whitespace-nowrap transition-colors backdrop-blur-[30px] flex items-center px-[14px] ${darkMode ? "text-gray-200" : "text-gray-700"}`}
                         style={darkMode
                           ? {
                               background: "rgba(255,255,255,0.12)",
@@ -2435,7 +3090,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   );
                 })()}
                 <div
-                  className={`flex items-center gap-2 px-2 h-[48px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : ""}`}
+                  className={`flex items-center gap-2 px-2 h-[44px] rounded-[40px] ${darkMode ? "bg-[#3a3a3c]" : ""}`}
                   style={darkMode ? { boxShadow: "0 0 6px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.2)" } : { backgroundColor: "rgba(255,255,255,0.96)", boxShadow: "0 0 6px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,1)" }}
                   onClick={() => {
                     if (!textSending && !sendStatus) {
@@ -2447,24 +3102,41 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                   <button
                     type="button"
                     className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
-                    style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)" }}
-                    aria-label={textMode && chatMessages.length > 0 ? "닫기" : "더보기"}
+                    style={{ background: darkMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)", marginLeft: -4 }}
+                    aria-label={ttsSpeaking || isLoading || (textMode && chatMessages.length > 0) ? "닫기" : "더보기"}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (textMode && chatMessages.length > 0) {
+                      if (ttsSpeaking || isLoading) {
+                        // TTS/응답 중단 → 음성 모드 복귀 (마이크 켜짐)
+                        if (ttsAudioRef.current) {
+                          ttsAudioRef.current.pause();
+                          ttsAudioRef.current.currentTime = 0;
+                          ttsAudioRef.current = null;
+                        }
+                        setTtsSpeaking(false);
+                        setIsLoading(false);
+                        setStatusMessage(null);
+                        pendingVoiceMsgsRef.current = null;
+                        messageTargetRef.current = null;
+                        setChatMessages([]);
+                        setVoiceStandby(true); // 마이크 OFF로 복귀
+                      } else if (textMode && (chatMessages.length > 0 || aiTyping)) {
+                        chatRequestIdRef.current++; // stale API 응답 무시
                         setChatMessages([]);
                         setTextMode(false);
                         setChoonsikCardView(false);
                         updateInputText("");
                         setTypingMessageId(null);
+                        setTypingDisplayedLength(0);
                         setAiTyping(false);
+                        setCircleActiveId(null);
                         inputRef.current?.blur();
                       } else {
                         setPlusMenuOpen((prev) => !prev);
                       }
                     }}
                   >
-                    <svg className={`w-5 h-5 transition-transform duration-300 ${darkMode ? "text-white" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ transform: (textMode && chatMessages.length > 0) || plusMenuOpen ? "rotate(45deg)" : "rotate(0deg)" }}>
+                    <svg className={`w-5 h-5 transition-transform duration-300 ${darkMode ? "text-white" : "text-black"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ transform: ttsSpeaking || isLoading || (textMode && chatMessages.length > 0) || plusMenuOpen ? "rotate(45deg)" : "rotate(0deg)" }}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
                   </button>
@@ -2475,7 +3147,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                     <input
                       ref={inputRef}
                       type="text"
-                      inputMode="text"
+                      inputMode="none"
                       enterKeyHint="send"
                       name="aimsg"
                       role="presentation"
@@ -2488,11 +3160,11 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       data-1p-ignore="true"
                       data-form-type="other"
                       value={inputText}
-                      placeholder={sendStatus ? sendStatus : textSending ? (loadingMessage || "처리 중...") : giftResult ? `${giftResult}에게 선물 메시지 보내기` : replyMode ? "이해수에게 답장" : "카나나에게 요청하기"}
+                      placeholder={sendStatus ? sendStatus : textSending ? (loadingMessage || "처리 중...") : giftResult ? `${giftResult}에게 선물 메시지 보내기` : messageTargetRef.current ? `${messageTargetRef.current}님에게 보낼 메시지 입력...` : replyMode ? "이해수에게 답장" : "카나나에게 요청하기"}
                       className={`w-full text-base outline-none bg-transparent ${darkMode ? "text-gray-100" : "text-gray-900"} ${sendStatus ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : textSending ? (darkMode ? "placeholder:text-white" : "placeholder:text-black") : (darkMode ? "placeholder:text-gray-400" : "placeholder:text-gray-900/40")}`}
                       style={{ fontSize: "16px" }}
                       disabled={textSending || !!sendStatus}
-                      onFocus={() => setTextMode(true)}
+                      onFocus={() => { setTextMode(true); setAiKbVisible(true); }}
                       onChange={(e) => updateInputText(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -2512,6 +3184,30 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                       }}
                     />
                   </label>
+                  {/* TTS 온오프 버튼 — AI 답변이 있을 때만 표시 */}
+                  {chatMessages.some(m => m.role === "ai") && (
+                    <button
+                      type="button"
+                      className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center transition-colors active:scale-95 ${ttsSpeaking ? "bg-[#FEE500]" : (darkMode ? "bg-white/15" : "bg-black/5")}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTts();
+                      }}
+                      aria-label={ttsSpeaking ? "읽기 중지" : "읽어주기"}
+                    >
+                      {ttsSpeaking ? (
+                        <svg className="w-[15px] h-[15px] text-[#191919]" fill="currentColor" viewBox="0 0 24 24">
+                          <rect x="6" y="5" width="4" height="14" rx="1" />
+                          <rect x="14" y="5" width="4" height="14" rx="1" />
+                        </svg>
+                      ) : (
+                        <svg className={`w-[15px] h-[15px] ${darkMode ? "text-white" : "text-[#555]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H2v6h4l5 4V5z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.54 8.46a5 5 0 010 7.07" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                   {(textMode || replyMode) && inputText.trim() ? (
                     <button
                       type="button"
@@ -2549,7 +3245,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
                           setInterimText("");
                           setStatusMessage(null);
                           inputRef.current?.blur();
-                          doStart();
+                          setVoiceStandby(true);
                         } else {
                           setTextMode(true);
                           inputRef.current?.focus({ preventScroll: true });
@@ -2584,7 +3280,7 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
 
       </>
 
-      {/* 사원증 풀스크린 오버레이 제거됨 — 카드 본체 안에서 표시 */}
+      {/* 강아지 놀이터 풀스크린 오버레이 제거됨 — 카드 본체 안에서 표시 */}
 
       {/* ── 플러스 메뉴 팝업 (팝업 위에 뜨는 별도 레이어) ── */}
       {plusMenuOpen && (
@@ -2633,6 +3329,17 @@ export function AILayerPopup({ isOpen, onClose, inputRef, darkMode, onDarkModeTo
         </>
       )}
 
+      {/* iOS 26 가상 키보드 */}
+      <div className="absolute bottom-0 left-0 right-0 z-[80]">
+        <IOSKeyboard
+          visible={aiKbVisible}
+          darkMode={darkMode}
+
+          onKey={(k) => updateInputText(inputText + k)}
+          onBackspace={() => updateInputText(inputText.slice(0, -1))}
+          onReturn={() => { handleTextSend(); setAiKbVisible(false); }}
+        />
+      </div>
     </div>
   );
 }

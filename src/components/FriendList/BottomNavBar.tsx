@@ -47,14 +47,14 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
   return (
     <nav
       className={[
-        "fixed left-[30px] right-[30px] z-20",
-        "h-[62px] rounded-[80px] overflow-hidden flex items-center",
+        "absolute left-[30px] right-[30px] z-20",
+        "h-[54px] rounded-[80px] overflow-hidden flex items-center",
         "backdrop-blur-[30px]",
         darkMode ? "bg-[#2c2c2e]/70" : "bg-white/[0.50]",
       ].join(" ")}
       style={{
         boxShadow: darkMode ? GLASS_SHADOW_DARK : GLASS_SHADOW_LIGHT,
-        bottom: "calc(4px + env(safe-area-inset-bottom))",
+        bottom: 24,
         pointerEvents: disabled ? "none" : undefined,
       }}
     >
@@ -77,7 +77,7 @@ export function BottomNavBar({ darkMode = false, activeTab = 0, onTabChange, unr
               onClick={() => i < 2 && onTabChange?.(i)}
             >
               {isActive && (
-                <span className={`absolute inset-0 rounded-[40px] ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.12]"}`} />
+                <span className={`absolute rounded-[40px] ${darkMode ? "bg-white/[0.12]" : "bg-black/[0.12]"}`} style={{ top: 2, bottom: 2, left: 2, right: 0 }} />
               )}
 
               <div className="relative z-10 flex items-center justify-center w-[25px] h-[25px]" style={i >= 2 ? { opacity: 0.2 } : undefined}>

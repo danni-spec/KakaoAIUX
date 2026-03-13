@@ -64,7 +64,7 @@ export function StatusBar({ darkMode = false, bgColor }: { darkMode?: boolean; b
 
   // 브라우저 모드: 기존 Fake 상태바 표시
   return (
-    <div className={`flex items-end justify-between px-6 pb-1 h-[52px] flex-shrink-0 transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`} style={bgColor ? { backgroundColor: bgColor } : undefined}>
+    <div className={`flex items-end justify-between px-6 pb-1 h-[52px] flex-shrink-0 transition-colors duration-500 bg-transparent`} style={bgColor ? { backgroundColor: bgColor } : undefined}>
       <span className={`text-[15px] font-semibold tracking-tight transition-colors duration-500 ${darkMode ? "text-white" : "text-gray-900"}`}>{time}</span>
       <div className={`flex items-center gap-1.5 transition-colors duration-500 ${darkMode ? "text-white" : "text-gray-900"}`}>
         {/* Battery — iPhone 스타일 (몸체 + 우측 캡) */}

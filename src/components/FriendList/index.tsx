@@ -80,6 +80,7 @@ export function FriendList() {
   const { activeChatRoomId, activeChatRoom, chatRooms } = chatRoomActions;
   const totalUnread = chatRooms.reduce((sum, r) => sum + r.unreadCount, 0);
   const [aiPopupOpen, setAiPopupOpen] = useState(false);
+  const [aiPopupMinimized, setAiPopupMinimized] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("darkMode");
     if (saved !== null) return saved === "true";
@@ -106,7 +107,7 @@ export function FriendList() {
 
 
   const handleFriendClick = useCallback((name: string) => {
-    if (name === "이해수 ❤️") {
+    if (name === "와이프 해수 ❤️") {
       setNotificationOpen(true);
     }
   }, []);
@@ -313,7 +314,7 @@ export function FriendList() {
 
   return (
     <div
-      className={`min-h-dvh h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
+      className={`h-full w-full overflow-hidden flex flex-col relative transition-colors duration-500 ${darkMode ? "bg-[#1c1c1e]" : "bg-white"}`}
     >
       <SquircleClipDef />
       <StatusBar darkMode={darkMode} />
@@ -365,7 +366,11 @@ export function FriendList() {
         onClose={() => setNotificationOpen(false)}
       />
       {/* absolute 오버레이 → backdrop-blur 실효 */}
-      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} unreadCount={totalUnread} disabled={aiPopupOpen} />
+      <BottomNavBar darkMode={darkMode} activeTab={gnbTab} onTabChange={setGnbTab} unreadCount={totalUnread} disabled={aiPopupOpen && !aiPopupMinimized} />
+      {/* iOS 홈 인디케이터 */}
+      <div className="absolute bottom-[8px] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+        <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
+      </div>
       <AILayerPopup
         isOpen={aiPopupOpen}
         onClose={() => {
@@ -395,10 +400,11 @@ export function FriendList() {
         chatRoomMessages={activeChatRoom?.messages.map(m => ({ sender: m.sender, text: m.text }))}
         onSendReply={activeChatRoomId ? (text) => chatRoomActions.sendMessage(activeChatRoomId, text) : undefined}
         onSendToMyChat={(text, voice) => chatRoomActions.sendMessage("room-my", text, undefined, voice)}
-        allChatRooms={chatRoomActions.chatRooms.map(r => ({ name: r.name, unreadCount: r.unreadCount, lastMessage: r.lastMessage }))}
+        allChatRooms={chatRoomActions.chatRooms.map(r => ({ name: r.name, unreadCount: r.unreadCount, lastMessage: r.lastMessage, messages: r.messages.map(m => ({ sender: m.sender, text: m.text })) }))}
         onMarkAllRead={chatRoomActions.markAllRead}
         showNotificationList={showNotificationList}
         onNotificationListClose={() => setShowNotificationList(false)}
+        onMinimizedChange={setAiPopupMinimized}
         onChipPlaceClick={
           activeChatRoom?.name === "서은재"
             ? () => {

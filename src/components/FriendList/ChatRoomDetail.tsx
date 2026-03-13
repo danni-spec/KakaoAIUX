@@ -3,6 +3,8 @@ import { useChatRooms } from "../../contexts/ChatRoomContext";
 import { CHAT_BUBBLE_RADIUS } from "../../constants/chat";
 import { SquircleAvatar } from "./SquircleAvatar";
 import { LinkifyText } from "./LinkifyText";
+import { IOSKeyboard } from "./IOSKeyboard";
+import { StatusBar } from "./StatusBar";
 
 /** 음성 재생 바 말풍선 + STT 텍스트 */
 function VoiceBubble({ duration, sttText, darkMode, isMe }: { duration: number; sttText: string; darkMode: boolean; isMe: boolean }) {
@@ -57,7 +59,7 @@ function VoiceBubble({ duration, sttText, darkMode, isMe }: { duration: number; 
   return (
     <div className="flex flex-col gap-1.5" style={{ maxWidth: 260 }}>
       {/* 음성 재생 바 */}
-      <div className={`${bubbleBg} px-3 py-[10px]`} style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
+      <div className={`${bubbleBg} px-[10px] py-2`} style={{ borderRadius: CHAT_BUBBLE_RADIUS }}>
         <div className="flex items-center gap-2.5">
           <button
             type="button"
@@ -90,7 +92,7 @@ function VoiceBubble({ duration, sttText, darkMode, isMe }: { duration: number; 
       {/* STT 텍스트 말풍선 */}
       {sttText && (
         <div
-          className={`${bubbleBg} px-3 py-[10px]`}
+          className={`${bubbleBg} px-[10px] py-2`}
           style={{ borderRadius: CHAT_BUBBLE_RADIUS, wordBreak: "keep-all" }}
         >
           {/* 상단: 녹음 시간 정보 */}
@@ -223,48 +225,18 @@ export function ChatRoomDetail({
     return () => { if (linkLoadingTimerRef.current) clearTimeout(linkLoadingTimerRef.current); };
   }, []);
 
-  // ── VisualViewport API로 키보드 높이 추적 ──
-  const [kbHeight, setKbHeight] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    let rafId = 0;
-    const sync = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const h = window.innerHeight - vv.height;
-        const newKb = h > 50 ? h : 0;
-        setKbHeight(newKb);
-
-        // body 바운싱 방지
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-        window.scrollTo(0, 0);
-        // 메시지 맨 아래로
-        requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-        });
-      });
-    };
-    vv.addEventListener("resize", sync);
-    vv.addEventListener("scroll", sync);
-    return () => {
-      cancelAnimationFrame(rafId);
-      vv.removeEventListener("resize", sync);
-      vv.removeEventListener("scroll", sync);
-    };
-  }, []);
+  // ── 가상 iOS 키보드 표시 상태 ──
+  const [kbVisible, setKbVisible] = useState(false);
+  const kbHeight = kbVisible ? 260 : 0;
 
   const onInputFocus = useCallback(() => {
+    setKbVisible(true);
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
     });
   }, []);
   const onInputBlur = useCallback(() => {
-    const vv = window.visualViewport;
-    if (!vv || window.innerHeight - vv.height < 50) {
-      setKbHeight(0);
-    }
+    setKbVisible(false);
   }, []);
 
   // 원 제스처 (마우스)
@@ -421,9 +393,10 @@ export function ChatRoomDetail({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      className={`absolute inset-0 z-50 flex flex-col ${darkMode ? "bg-[#1c1c1e]" : "bg-[#abc1d1]"}`}
     >
+      {/* 상단 스테이터스 바 */}
+      <StatusBar darkMode={darkMode} bgColor={darkMode ? "#2c2c2e" : "#abc1d1"} />
       {/* 헤더 */}
       <div
         className={`relative flex items-center px-4 h-[44px] flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-[#abc1d1]"}`}
@@ -503,7 +476,7 @@ export function ChatRoomDetail({
                     </div>
                   ) : (
                     <div
-                      className={`px-3 py-[9px] min-h-[36px] text-[15px] leading-snug ${
+                      className={`px-[10px] py-2 min-h-[36px] text-[15px] leading-snug ${
                         isMe
                           ? "bg-[#FEE500] text-[#191919]"
                           : darkMode
@@ -535,7 +508,6 @@ export function ChatRoomDetail({
            키보드 활성 시: safe-area 패딩 제거 → 입력이 키보드에 밀착 */}
       <div
         className={`flex-shrink-0 ${darkMode ? "bg-[#2c2c2e]" : "bg-white"}`}
-        style={{ paddingBottom: kbHeight > 0 ? kbHeight : 0 }}
       >
         {/* 입력 컨트롤 */}
         <div
@@ -552,7 +524,7 @@ export function ChatRoomDetail({
             <input
               ref={inputRef}
               type="text"
-              inputMode="text"
+              inputMode="none"
               name="chatmsg"
               role="presentation"
               autoComplete="new-password"
@@ -600,10 +572,20 @@ export function ChatRoomDetail({
             )}
           </div>
         </div>
-        {/* safe-area 바닥 채움: 키보드 없을 때만 표시, 배경색이 기기 최하단까지 연장 */}
-        {kbHeight === 0 && (
-          <div style={{ height: "env(safe-area-inset-bottom)" }} />
-        )}
+      </div>
+
+      {/* iOS 가상 키보드 */}
+      <IOSKeyboard
+        visible={kbVisible}
+        darkMode={darkMode}
+        onKey={(k) => setText((prev) => prev + k)}
+        onBackspace={() => setText((prev) => prev.slice(0, -1))}
+        onReturn={() => { handleSend(); setKbVisible(false); }}
+      />
+
+      {/* 하단 홈 인디케이터 */}
+      <div className={`flex-shrink-0 h-[34px] flex items-end justify-center pb-[8px] ${darkMode ? "bg-[#1c1c1e]" : kbVisible ? "bg-[#d1d3d9]" : "bg-white"}`}>
+        <div className={`w-[134px] h-[5px] rounded-full ${darkMode ? "bg-white" : "bg-black"}`} />
       </div>
 
       {/* ── 상품 레이어 팝업 ── */}
@@ -852,7 +834,7 @@ export function ChatRoomDetail({
       {/* ── 링크 클릭 로딩 오버레이 ── */}
       {linkLoading && (
         <>
-          <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.05)" }}>
+          <div className="absolute inset-0 z-[200] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.05)" }}>
             <div className="w-[40px] h-[40px] animate-spin-loader">
               <svg viewBox="0 0 40 40" className="w-full h-full">
                 <circle

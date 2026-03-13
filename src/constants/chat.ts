@@ -13,9 +13,10 @@ export const AI_SENT_BUBBLE_STYLE: CSSProperties = {
   minHeight: 44,
   paddingTop: 6,
   paddingBottom: 6,
+  width: "fit-content",
 };
 
-export const AI_SENT_BUBBLE_CLASS = "max-w-[92%] px-3.5 flex items-center text-[16px] font-medium leading-snug text-black";
+export const AI_SENT_BUBBLE_CLASS = "max-w-full px-3.5 flex items-center text-[16px] font-medium leading-snug text-black";
 
 /** AI 레이어 받은 말풍선 스타일 */
 export const AI_RECEIVED_BUBBLE_STYLE: CSSProperties = {
